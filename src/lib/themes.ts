@@ -23,7 +23,7 @@ export const THEME_IDS = [
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
-export const DEFAULT_THEME: ThemeId = "violet";
+export const DEFAULT_THEME: ThemeId = "emerald";
 
 export const STORAGE_KEY = "wacrm.theme";
 
