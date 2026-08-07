@@ -168,13 +168,27 @@ export async function POST() {
       const result = await fetchQrCode({ baseUrl: EVOLUTION_BASE_URL, apiKey, instanceName })
       qrCode = result.qrCode
     } else {
-      const created = await createInstance({
-        baseUrl: EVOLUTION_BASE_URL,
-        adminApiKey: EVOLUTION_ADMIN_KEY,
-        instanceName,
-      })
-      apiKey = created.apiKey
-      qrCode = created.qrCode
+      try {
+        const created = await createInstance({
+          baseUrl: EVOLUTION_BASE_URL,
+          adminApiKey: EVOLUTION_ADMIN_KEY,
+          instanceName,
+        })
+        apiKey = created.apiKey
+        qrCode = created.qrCode
+      } catch (err) {
+        // The instance can already exist on the Evolution server without
+        // a matching whatsapp_channels row (e.g. a previous attempt's DB
+        // write failed after the instance was created). Recover instead
+        // of failing: the admin key can fetch a QR for any instance on
+        // this server, so fall back to that rather than surfacing
+        // "name already in use" to the dealership.
+        const message = err instanceof Error ? err.message : ''
+        if (!/already in use|already exists/i.test(message)) throw err
+        apiKey = EVOLUTION_ADMIN_KEY
+        const result = await fetchQrCode({ baseUrl: EVOLUTION_BASE_URL, apiKey, instanceName })
+        qrCode = result.qrCode
+      }
     }
 
     if (webhookUrl.startsWith('http')) {
