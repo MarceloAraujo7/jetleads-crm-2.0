@@ -39,8 +39,8 @@ type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
 export function WhatsAppConfig() {
   const t = useTranslations('Settings.whatsapp');
   const supabase = createClient();
-  // After multi-user, whatsapp_config is one-row-per-account, not
-  // one-row-per-user. We pull `accountId` straight off the auth
+  // After multi-user, whatsapp_channels is one-row-per-(account,
+  // provider), not one-row-per-user. We pull `accountId` straight off the auth
   // context and key every read off it — so a teammate who just
   // joined an account sees the inviter's saved config without
   // having to re-enter anything.
@@ -100,13 +100,14 @@ export function WhatsAppConfig() {
       // Load form values from Supabase (shows what's in DB).
       // Switched from `user_id` (which would only match the row's
       // original author) to `account_id` so every member of the
-      // account sees the same saved configuration. UNIQUE(account_id)
-      // on the table guarantees the .maybeSingle() return type
-      // remains accurate.
+      // account sees the same saved configuration.
+      // UNIQUE(account_id, provider) on the table guarantees the
+      // .maybeSingle() return type remains accurate.
       const { data, error } = await supabase
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .select('*')
         .eq('account_id', acctId)
+        .eq('provider', 'meta_cloud')
         .maybeSingle();
 
       if (error) {

@@ -75,9 +75,10 @@ export async function resolveAuditUserId(
   accountId: string
 ): Promise<string> {
   const { data: config } = await db
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('user_id')
     .eq('account_id', accountId)
+    .eq('provider', 'meta_cloud')
     .maybeSingle();
   const configOwner = config?.user_id as string | undefined;
   if (configOwner) return configOwner;

@@ -112,9 +112,10 @@ export async function createBroadcast(
   // Config (fail fast + provides the audit trail owner already resolved
   // by the caller). Meta send needs phone_number_id + decrypted token.
   const { data: config, error: configError } = await db
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('*')
     .eq('account_id', accountId)
+    .eq('provider', 'meta_cloud')
     .single();
   if (configError || !config) {
     throw new BroadcastError(

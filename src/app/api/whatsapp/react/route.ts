@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       return rateLimitResponse(limit);
     }
 
-    // Resolve the caller's account_id so conversation + whatsapp_config
+    // Resolve the caller's account_id so conversation + whatsapp_channels
     // lookups work for teammates who didn't author the rows directly.
     const { data: profile } = await supabase
       .from('profiles')
@@ -109,10 +109,12 @@ export async function POST(request: Request) {
     }
 
     // WhatsApp config + access token. Account-scoped post-multi-user.
+    // Reactions are a Meta Cloud API feature — no Evolution equivalent.
     const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('phone_number_id, access_token')
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
       .single();
 
     if (configError || !config) {

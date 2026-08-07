@@ -79,7 +79,7 @@ export async function POST(request: Request) {
       return rateLimitResponse(limit)
     }
 
-    // Resolve the caller's account_id. whatsapp_config + templates
+    // Resolve the caller's account_id. whatsapp_channels + templates
     // + broadcasts are all account-scoped post-multi-user, so the
     // old `.eq('user_id', user.id)` filters miss every row created
     // by a teammate.
@@ -135,9 +135,10 @@ export async function POST(request: Request) {
     }
 
     const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('*')
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
       .single()
 
     if (configError || !config) {

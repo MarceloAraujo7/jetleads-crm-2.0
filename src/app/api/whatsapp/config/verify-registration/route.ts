@@ -38,9 +38,10 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // whatsapp_config is one-row-per-account post-017. Resolve the
-  // caller's account_id so a teammate who joined an existing account
-  // sees the same registration state as the admin who set it up.
+  // whatsapp_channels is one-row-per-(account, provider) post-037.
+  // Resolve the caller's account_id so a teammate who joined an
+  // existing account sees the same registration state as the admin
+  // who set it up.
   const { data: profile } = await supabase
     .from('profiles')
     .select('account_id')
@@ -56,9 +57,10 @@ export async function GET() {
   }
 
   const { data: config } = await supabase
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('*')
     .eq('account_id', accountId)
+    .eq('provider', 'meta_cloud')
     .maybeSingle()
 
   if (!config) {

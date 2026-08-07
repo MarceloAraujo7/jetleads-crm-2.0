@@ -183,8 +183,8 @@ function InboxPageInner() {
 
       if (!user) return;
 
-      // whatsapp_config is one-row-per-account post-multi-user, so
-      // the previous `.eq('user_id', user.id)` would miss the row
+      // whatsapp_channels is one-row-per-(account, provider) post-037,
+      // so the previous `.eq('user_id', user.id)` would miss the row
       // for any teammate who didn't personally save the config —
       // the "WhatsApp not connected" banner would show in the
       // shared inbox even though the admin had it configured.
@@ -200,13 +200,15 @@ function InboxPageInner() {
         return;
       }
 
+      // Any connected channel (Meta or Evolution) counts — either can
+      // carry inbox replies.
       const { data } = await supabase
-        .from("whatsapp_config")
+        .from("whatsapp_channels")
         .select("status")
         .eq("account_id", accountId)
-        .maybeSingle();
+        .eq("status", "connected");
 
-      setWhatsappConnected(data?.status === "connected");
+      setWhatsappConnected((data?.length ?? 0) > 0);
     };
 
     checkConnection();

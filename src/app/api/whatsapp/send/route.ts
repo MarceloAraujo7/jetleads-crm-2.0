@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     }
 
     // Resolve the caller's account_id. Every downstream lookup
-    // (conversation, whatsapp_config, message_templates) is account-
+    // (conversation, whatsapp_channels, message_templates) is account-
     // scoped post-multi-user, so the previous `user_id` filters
     // returned nothing for teammates who didn't author the row.
     const { data: profile } = await supabase

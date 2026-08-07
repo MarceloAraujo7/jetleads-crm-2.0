@@ -101,10 +101,12 @@ export async function GET(request: Request) {
       )
     }
 
-    // Fetch all whatsapp configs to check verify tokens
+    // Fetch all Meta Cloud channels to check verify tokens (Evolution
+    // channels have no verify_token — the handshake is Meta-only).
     const { data: configs, error: configError } = await supabaseAdmin()
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('id, verify_token')
+      .eq('provider', 'meta_cloud')
 
     if (configError || !configs) {
       console.error('Error fetching configs for verification:', configError)
@@ -136,7 +138,7 @@ export async function GET(request: Request) {
       // since it's a no-op once the column is already GCM.
       if (isLegacyFormat(matchedConfig.verify_token)) {
         void supabaseAdmin()
-          .from('whatsapp_config')
+          .from('whatsapp_channels')
           .update({ verify_token: encrypt(verifyToken) })
           .eq('id', matchedConfig.id)
           .then(({ error }: { error: unknown }) => {
@@ -253,13 +255,14 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       // post-migration 013 (UNIQUE constraint), but a row created
       // before the constraint, or a race, would still surface here.
       const { data: configRows, error: configError } = await supabaseAdmin()
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .select('*')
+        .eq('provider', 'meta_cloud')
         .eq('phone_number_id', phoneNumberId)
 
       if (configError) {
         console.error(
-          'Error fetching whatsapp_config for phone_number_id:',
+          'Error fetching whatsapp_channels for phone_number_id:',
           phoneNumberId,
           configError
         )
@@ -560,7 +563,7 @@ async function handleReaction(
 async function processMessage(
   message: WhatsAppMessage,
   contact: { profile: { name: string }; wa_id: string },
-  // Tenancy. Resolved from the matched whatsapp_config row; every
+  // Tenancy. Resolved from the matched whatsapp_channels row; every
   // contact / conversation / message row created downstream is
   // stamped with this so any member of the account can see it.
   accountId: string,
@@ -1021,6 +1024,7 @@ async function findOrCreateContact(
       user_id: configOwnerUserId,
       phone,
       name: name || phone,
+      source: 'whatsapp_inbound',
     })
     .select()
     .single()

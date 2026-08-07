@@ -33,7 +33,7 @@ import { supabaseAdmin } from './admin-client'
 // ------------------------------------------------------------
 
 interface SendTextEngineArgs {
-  /** Account-level tenancy key. Drives contact + whatsapp_config
+  /** Account-level tenancy key. Drives contact + whatsapp_channels
    *  lookups so a flow authored by user A still sends through the
    *  WhatsApp number user B saved on the same account. */
   accountId: string
@@ -83,9 +83,10 @@ export async function engineSendText(
   }
 
   const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('*')
     .eq('account_id', args.accountId)
+    .eq('provider', 'meta_cloud')
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
@@ -193,9 +194,10 @@ export async function engineSendMedia(
   }
 
   const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('*')
     .eq('account_id', args.accountId)
+    .eq('provider', 'meta_cloud')
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')
@@ -326,7 +328,7 @@ async function sendInteractiveViaMeta(
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
 
-  // Scope the contact + whatsapp_config lookups by account_id —
+  // Scope the contact + whatsapp_channels lookups by account_id —
   // same defense-in-depth rationale as automations/meta-send.ts.
   // Migration 017 moved both tables to account-scoped tenancy.
   const { data: contact, error: contactErr } = await db
@@ -345,9 +347,10 @@ async function sendInteractiveViaMeta(
   }
 
   const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('*')
     .eq('account_id', input.accountId)
+    .eq('provider', 'meta_cloud')
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')

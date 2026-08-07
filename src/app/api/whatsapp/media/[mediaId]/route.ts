@@ -31,10 +31,10 @@ export async function GET(
       )
     }
 
-    // Resolve the caller's account_id — whatsapp_config is one-per-
-    // account post-multi-user, so a teammate fetching media for a
-    // conversation in the shared inbox needs the account's config,
-    // not their personal (non-existent) row.
+    // Resolve the caller's account_id — whatsapp_channels is one-per-
+    // (account, provider) post-multi-user, so a teammate fetching media
+    // for a conversation in the shared inbox needs the account's
+    // config, not their personal (non-existent) row.
     const { data: profile } = await supabase
       .from('profiles')
       .select('account_id')
@@ -48,11 +48,14 @@ export async function GET(
       )
     }
 
-    // Fetch and decrypt WhatsApp config
+    // Fetch and decrypt WhatsApp config. Media download is a Meta
+    // Cloud API feature (media uploaded via Evolution is fetched
+    // directly from its own URL, no id-based lookup needed).
     const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('*')
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
       .single()
 
     if (configError || !config) {

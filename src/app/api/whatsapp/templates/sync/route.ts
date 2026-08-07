@@ -135,7 +135,7 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Resolve the caller's account_id — both whatsapp_config and
+    // Resolve the caller's account_id — both whatsapp_channels and
     // the message_templates we sync into are account-scoped.
     const { data: profile } = await supabase
       .from('profiles')
@@ -151,9 +151,10 @@ export async function POST() {
     }
 
     const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('*')
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
       .single()
 
     if (configError || !config) {

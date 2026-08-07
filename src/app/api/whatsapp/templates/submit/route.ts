@@ -75,7 +75,7 @@ async function upsertTemplateRow(
 /**
  * Submit a template to Meta for approval AND persist it locally.
  *
- * Auth → fetch whatsapp_config → validate → (DRY_RUN short-circuit) →
+ * Auth → fetch whatsapp_channels → validate → (DRY_RUN short-circuit) →
  * POST to Meta → upsert local row by (user_id, name, language) with
  * status, meta_template_id, sample_values, last_submitted_at.
  *
@@ -97,7 +97,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Resolve the caller's account_id — whatsapp_config + the
+    // Resolve the caller's account_id — whatsapp_channels + the
     // message_templates row are account-scoped post-multi-user.
     const { data: profile } = await supabase
       .from('profiles')
@@ -150,9 +150,10 @@ export async function POST(request: Request) {
       metaStatus = 'PENDING'
     } else {
       const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .select('*')
         .eq('account_id', accountId)
+        .eq('provider', 'meta_cloud')
         .single()
       if (configError || !config) {
         return NextResponse.json(

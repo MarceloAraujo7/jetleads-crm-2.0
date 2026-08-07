@@ -25,7 +25,7 @@ import { supabaseAdmin } from './admin-client'
 // ------------------------------------------------------------
 
 interface SendTextArgs {
-  /** Account-level tenancy key. Drives contact + whatsapp_config
+  /** Account-level tenancy key. Drives contact + whatsapp_channels
    *  lookups so an automation authored by user A still sends through
    *  the WhatsApp number user B saved on the same account. */
   accountId: string
@@ -132,9 +132,10 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   }
 
   const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
+    .from('whatsapp_channels')
     .select('*')
     .eq('account_id', input.accountId)
+    .eq('provider', 'meta_cloud')
     .single()
   if (configErr || !config) {
     throw new Error('WhatsApp not configured for this account')

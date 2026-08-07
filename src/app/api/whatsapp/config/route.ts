@@ -86,13 +86,14 @@ export async function GET() {
     }
 
     const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('phone_number_id, access_token, status')
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
       .maybeSingle()
 
     if (configError) {
-      console.error('Error fetching whatsapp_config:', configError)
+      console.error('Error fetching whatsapp_channels:', configError)
       return NextResponse.json(
         { connected: false, reason: 'db_error', message: 'Failed to fetch configuration' },
         { status: 200 }
@@ -211,8 +212,9 @@ export async function POST(request: Request) {
     // account_id (not user_id) since teammates inside the same account
     // all share one config; the conflict is between accounts.
     const { data: claimed, error: claimedError } = await supabaseAdmin()
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('account_id')
+      .eq('provider', 'meta_cloud')
       .eq('phone_number_id', phone_number_id)
       .neq('account_id', accountId)
       .maybeSingle()
@@ -273,9 +275,10 @@ export async function POST(request: Request) {
     // this number is already registered with Meta — if so we can skip
     // /register when the user didn't provide a PIN this time around.
     const { data: existing } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .select('id, registered_at, phone_number_id')
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
       .maybeSingle()
 
     const sameNumber =
@@ -368,12 +371,13 @@ export async function POST(request: Request) {
 
     if (existing) {
       const { error: updateError } = await supabase
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .update(baseRow)
         .eq('account_id', accountId)
+        .eq('provider', 'meta_cloud')
 
       if (updateError) {
-        console.error('Error updating whatsapp_config:', updateError)
+        console.error('Error updating whatsapp_channels:', updateError)
         return NextResponse.json(
           { error: 'Failed to update configuration' },
           { status: 500 }
@@ -381,19 +385,20 @@ export async function POST(request: Request) {
       }
     } else {
       // Insert with both columns: `account_id` is the tenancy key
-      // (NOT NULL post-017, UNIQUE so duplicates trip the constraint
-      // up-front), `user_id` is the audit column identifying which
-      // member of the account saved the config.
+      // (NOT NULL post-017, UNIQUE(account_id, provider) so duplicates
+      // trip the constraint up-front), `user_id` is the audit column
+      // identifying which member of the account saved the config.
       const { error: insertError } = await supabase
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .insert({
           account_id: accountId,
           user_id: user.id,
+          provider: 'meta_cloud',
           ...baseRow,
         })
 
       if (insertError) {
-        console.error('Error inserting whatsapp_config:', insertError)
+        console.error('Error inserting whatsapp_channels:', insertError)
         return NextResponse.json(
           { error: 'Failed to save configuration' },
           { status: 500 }
@@ -460,12 +465,13 @@ export async function DELETE() {
     }
 
     const { error: deleteError } = await supabase
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .delete()
       .eq('account_id', accountId)
+      .eq('provider', 'meta_cloud')
 
     if (deleteError) {
-      console.error('Error deleting whatsapp_config:', deleteError)
+      console.error('Error deleting whatsapp_channels:', deleteError)
       return NextResponse.json(
         { error: 'Failed to delete configuration' },
         { status: 500 }

@@ -5,8 +5,10 @@
 //
 // Given a conversation and message params, this:
 //   1. validates the params for the message type,
-//   2. loads the conversation + contact + WhatsApp config,
-//   3. sends to Meta (with phone-variant retry + contact auto-fix),
+//   2. loads the conversation + contact + WhatsApp channel(s),
+//   3. sends via Evolution API (if connected, for text/media) or Meta
+//      Cloud API otherwise — templates/interactive always use Meta —
+//      with phone-variant retry + contact auto-fix,
 //   4. persists the message + updates the conversation,
 //   5. pauses any active Flow run for the contact (agent stepped in).
 //
@@ -29,6 +31,11 @@ import {
   sendInteractiveList,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api';
+import {
+  sendTextMessage as sendEvolutionText,
+  sendMediaMessage as sendEvolutionMedia,
+  type EvolutionMediaKind,
+} from '@/lib/whatsapp/evolution-api';
 import {
   validateInteractivePayload,
   interactivePayloadPreviewText,
@@ -247,14 +254,14 @@ export async function sendMessageToConversation(
     );
   }
 
-  // WhatsApp config, account-scoped.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
+  // WhatsApp channels, account-scoped. An account may have a Meta
+  // Cloud channel, an Evolution channel, or both.
+  const { data: channels, error: configError } = await db
+    .from('whatsapp_channels')
     .select('*')
-    .eq('account_id', accountId)
-    .single();
+    .eq('account_id', accountId);
 
-  if (configError || !config) {
+  if (configError || !channels || channels.length === 0) {
     throw new SendMessageError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -262,12 +269,39 @@ export async function sendMessageToConversation(
     );
   }
 
-  const accessToken = decrypt(config.access_token);
+  const metaConfig = channels.find((c) => c.provider === 'meta_cloud') ?? null;
+  const evolutionConfig =
+    channels.find((c) => c.provider === 'evolution' && c.status === 'connected') ??
+    null;
 
-  // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
-  if (isLegacyFormat(config.access_token)) {
+  // Routing: templates and interactive (buttons/list) messages are a
+  // Meta Cloud API concept with no Evolution equivalent, so they
+  // always go through Meta. Plain text/media prefers a connected
+  // Evolution channel when one exists (no 24h session-window limit),
+  // falling back to Meta otherwise.
+  const requiresMeta = messageType === 'template' || messageType === 'interactive';
+  const useEvolution = !requiresMeta && evolutionConfig !== null;
+
+  if (useEvolution === false && metaConfig === null) {
+    throw new SendMessageError(
+      'whatsapp_not_configured',
+      requiresMeta
+        ? 'WhatsApp official API not configured. Templates and interactive messages require Meta Cloud API.'
+        : 'WhatsApp not configured. Please set up your WhatsApp integration first.',
+      400
+    );
+  }
+
+  const config = useEvolution ? evolutionConfig! : metaConfig!;
+  const accessToken = useEvolution
+    ? decrypt(config.evolution_api_key)
+    : decrypt(config.access_token);
+
+  // Self-heal legacy CBC ciphertexts on the Meta token. Fire-and-forget;
+  // idempotent. (Evolution API keys aren't stored in the legacy format.)
+  if (!useEvolution && isLegacyFormat(config.access_token)) {
     void db
-      .from('whatsapp_config')
+      .from('whatsapp_channels')
       .update({ access_token: encrypt(accessToken) })
       .eq('id', config.id)
       .then(({ error }: { error: { message: string } | null }) => {
@@ -330,6 +364,30 @@ export async function sendMessageToConversation(
   }
 
   const attempt = async (phone: string): Promise<string> => {
+    if (useEvolution) {
+      if (isMediaKind) {
+        const result = await sendEvolutionMedia({
+          baseUrl: config.evolution_base_url,
+          apiKey: accessToken,
+          instanceName: config.evolution_instance_name,
+          to: phone,
+          kind: messageType as EvolutionMediaKind,
+          link: mediaUrl!,
+          caption: contentText || undefined,
+          filename: filename || undefined,
+        });
+        return result.messageId;
+      }
+      const result = await sendEvolutionText({
+        baseUrl: config.evolution_base_url,
+        apiKey: accessToken,
+        instanceName: config.evolution_instance_name,
+        to: phone,
+        text: contentText!,
+      });
+      return result.messageId;
+    }
+
     if (messageType === 'template') {
       const result = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,
@@ -424,10 +482,11 @@ export async function sendMessageToConversation(
 
     if (lastError) throw lastError;
   } catch (err) {
+    const providerLabel = useEvolution ? 'Evolution' : 'Meta';
     const message =
-      err instanceof Error ? err.message : 'Unknown Meta API error';
-    console.error('[send-message] Meta send failed for all variants:', message);
-    throw new SendMessageError('meta_error', `Meta API error: ${message}`, 502);
+      err instanceof Error ? err.message : `Unknown ${providerLabel} API error`;
+    console.error(`[send-message] ${providerLabel} send failed for all variants:`, message);
+    throw new SendMessageError('provider_error', `${providerLabel} API error: ${message}`, 502);
   }
 
   if (workingPhone !== sanitizedPhone) {
@@ -470,7 +529,7 @@ export async function sendMessageToConversation(
     console.error('[send-message] error inserting sent message:', msgError);
     throw new SendMessageError(
       'db_error',
-      `Message sent to Meta but failed to save to DB: ${msgError.message}`,
+      `Message sent but failed to save to DB: ${msgError.message}`,
       500
     );
   }

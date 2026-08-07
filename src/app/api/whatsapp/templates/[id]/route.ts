@@ -65,7 +65,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Resolve the caller's account_id so template + whatsapp_config
+    // Resolve the caller's account_id so template + whatsapp_channels
     // lookups work for teammates who didn't author the row.
     const { data: profile } = await supabase
       .from('profiles')
@@ -139,9 +139,10 @@ export async function PATCH(
 
     if (!isDryRun()) {
       const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .select('*')
         .eq('account_id', accountId)
+        .eq('provider', 'meta_cloud')
         .single()
       if (configError || !config) {
         return NextResponse.json(
@@ -253,7 +254,7 @@ export async function DELETE(
 
     // Same account-scoping rationale as the PATCH handler above —
     // teammates need to be able to operate on shared templates +
-    // the shared whatsapp_config.
+    // the shared whatsapp_channels.
     const { data: profile } = await supabase
       .from('profiles')
       .select('account_id')
@@ -279,9 +280,10 @@ export async function DELETE(
 
     if (existing.meta_template_id && !isDryRun()) {
       const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
+        .from('whatsapp_channels')
         .select('*')
         .eq('account_id', accountId)
+        .eq('provider', 'meta_cloud')
         .single()
       if (configError || !config || !config.waba_id) {
         return NextResponse.json(
