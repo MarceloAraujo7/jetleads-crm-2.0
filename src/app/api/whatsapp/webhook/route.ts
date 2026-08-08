@@ -13,6 +13,8 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
+import { tryRelayFromAgent, isKnownAgentPhone } from '@/lib/whatsapp/relay-engine'
+import { forwardCustomerReplyToAgent } from '@/lib/whatsapp/relay-notify'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -33,7 +35,7 @@ function supabaseAdmin() {
   return _adminClient
 }
 
-interface WhatsAppMessage {
+export interface WhatsAppMessage {
   id: string
   from: string
   timestamp: string
@@ -573,8 +575,25 @@ async function processMessage(
   configOwnerUserId: string,
   accessToken: string
 ) {
+  // Relay Proxy: an agent quote-replying (on their own personal
+  // WhatsApp) to a handoff notification or forwarded customer reply
+  // lands here like any other inbound message. Intercept it BEFORE any
+  // contact/conversation is created — the agent is never a CRM contact.
+  if (await tryRelayFromAgent(message)) return
+
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
+
+  // Relay Proxy edge case: the agent messaged the official number
+  // directly (no quote), so tryRelayFromAgent above didn't match
+  // anything. Drop it rather than creating a contact for the agent
+  // themselves — they need to quote-reply to route to a lead.
+  if (await isKnownAgentPhone(accountId, senderPhone)) {
+    console.warn(
+      `[webhook] message from known agent phone ${senderPhone} without a quoted reply — dropped, not creating a contact.`,
+    )
+    return
+  }
 
   // Find or create contact
   const contactOutcome = await findOrCreateContact(
@@ -709,6 +728,21 @@ async function processMessage(
   // so the broadcast's `replied_count` advances (via the aggregate
   // trigger installed in migration 003).
   await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+
+  // Relay Proxy: a human is already on this thread — forward the
+  // customer's message to the assigned agent's own WhatsApp so they
+  // can keep replying by quoting, without opening the dashboard.
+  // Fire-and-forget; never blocks the webhook's response to Meta.
+  if (conversation.assigned_agent_id) {
+    void forwardCustomerReplyToAgent(
+      conversation.id,
+      accountId,
+      conversation.assigned_agent_id,
+      message,
+      contentType,
+      contentText,
+    ).catch((err) => console.error('[webhook] forwardCustomerReplyToAgent failed:', err))
+  }
 
   // ============================================================
   // Flow runner dispatch.

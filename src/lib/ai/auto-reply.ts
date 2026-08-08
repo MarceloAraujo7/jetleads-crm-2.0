@@ -9,6 +9,7 @@ import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { notifyAgentOfHandoff } from '@/lib/whatsapp/relay-notify'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_channels lookups. */
@@ -154,6 +155,16 @@ export async function dispatchInboundToAiReply(
         update.assigned_agent_id = config.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)
+      // Relay Proxy: notify the agent on their own WhatsApp so they can
+      // pick up the lead by quote-replying, no dashboard needed. Only
+      // fires when this handoff actually assigned a specific agent (not
+      // when it's left in the shared queue). Best-effort — never let a
+      // notification failure affect the handoff itself.
+      if (update.assigned_agent_id) {
+        void notifyAgentOfHandoff(conversationId, update.assigned_agent_id as string).catch(
+          (err) => console.error('[ai auto-reply] notifyAgentOfHandoff failed:', err),
+        )
+      }
       return
     }
 

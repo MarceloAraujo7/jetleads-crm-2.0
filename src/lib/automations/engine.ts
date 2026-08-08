@@ -24,6 +24,7 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { notifyAgentOfHandoff } from '@/lib/whatsapp/relay-notify'
 
 // ------------------------------------------------------------
 // Public API
@@ -488,11 +489,20 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         agentId = profiles?.[0]?.user_id
       }
       if (!agentId) return 'no agent resolved'
-      await db
+      const { data: assigned } = await db
         .from('conversations')
         .update({ assigned_agent_id: agentId })
         .eq('account_id', args.automation.account_id)
         .eq('contact_id', args.contactId)
+        .select('id')
+      // Relay Proxy: notify the agent on their own WhatsApp — same
+      // best-effort, fire-and-forget shape as the AI auto-reply handoff
+      // in src/lib/ai/auto-reply.ts.
+      for (const conv of assigned ?? []) {
+        void notifyAgentOfHandoff(conv.id, agentId).catch((err) =>
+          console.error('[automations] notifyAgentOfHandoff failed:', err),
+        )
+      }
       return `assigned to ${agentId}`
     }
 
