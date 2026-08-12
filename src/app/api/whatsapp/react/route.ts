@@ -115,6 +115,7 @@ export async function POST(request: Request) {
       .select('phone_number_id, access_token')
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
+      .eq('is_default', true)
       .single();
 
     if (configError || !config) {

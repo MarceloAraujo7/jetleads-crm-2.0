@@ -90,6 +90,7 @@ export async function GET() {
       .select('phone_number_id, access_token, status')
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
+      .eq('is_default', true)
       .maybeSingle()
 
     if (configError) {
@@ -274,11 +275,14 @@ export async function POST(request: Request) {
     // Look up any pre-existing row for this account so we know whether
     // this number is already registered with Meta — if so we can skip
     // /register when the user didn't provide a PIN this time around.
+    // This form manages the account's DEFAULT Meta channel — adding
+    // more numbers (multi-number accounts) is a separate settings flow.
     const { data: existing } = await supabase
       .from('whatsapp_channels')
       .select('id, registered_at, phone_number_id')
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
+      .eq('is_default', true)
       .maybeSingle()
 
     const sameNumber =
@@ -375,6 +379,7 @@ export async function POST(request: Request) {
         .update(baseRow)
         .eq('account_id', accountId)
         .eq('provider', 'meta_cloud')
+        .eq('is_default', true)
 
       if (updateError) {
         console.error('Error updating whatsapp_channels:', updateError)
@@ -394,6 +399,7 @@ export async function POST(request: Request) {
           account_id: accountId,
           user_id: user.id,
           provider: 'meta_cloud',
+          is_default: true,
           ...baseRow,
         })
 
@@ -469,6 +475,7 @@ export async function DELETE() {
       .delete()
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
+      .eq('is_default', true)
 
     if (deleteError) {
       console.error('Error deleting whatsapp_channels:', deleteError)

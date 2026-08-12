@@ -36,6 +36,7 @@ import {
   sendMediaMessage as sendEvolutionMedia,
   type EvolutionMediaKind,
 } from '@/lib/whatsapp/evolution-api';
+import { resolveChannel } from '@/lib/whatsapp/channel-resolve';
 import {
   validateInteractivePayload,
   interactivePayloadPreviewText,
@@ -254,8 +255,8 @@ export async function sendMessageToConversation(
     );
   }
 
-  // WhatsApp channels, account-scoped. An account may have a Meta
-  // Cloud channel, an Evolution channel, or both.
+  // WhatsApp channels, account-scoped. An account may have several
+  // Meta Cloud channels (multi-number) and up to one Evolution channel.
   const { data: channels, error: configError } = await db
     .from('whatsapp_channels')
     .select('*')
@@ -269,7 +270,12 @@ export async function sendMessageToConversation(
     );
   }
 
-  const metaConfig = channels.find((c) => c.provider === 'meta_cloud') ?? null;
+  // Prefer the channel this conversation is already anchored to; else
+  // resolve by the contact's DDD (falls back to the account default).
+  const metaConfig = conversation.channel_id
+    ? (channels.find((c) => c.id === conversation.channel_id && c.provider === 'meta_cloud') ??
+      (await resolveChannel(db, accountId, { phoneForDdd: contact.phone })))
+    : await resolveChannel(db, accountId, { phoneForDdd: contact.phone });
   const evolutionConfig =
     channels.find((c) => c.provider === 'evolution' && c.status === 'connected') ??
     null;

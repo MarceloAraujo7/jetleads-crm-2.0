@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { resolveChannel } from '@/lib/whatsapp/channel-resolve'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard'
 import {
@@ -103,6 +104,7 @@ export async function POST(request: Request) {
       template_name,
       template_language,
       template_params,
+      channel_id,
     } = body
 
     // Normalize to a list of {phone, params} regardless of shape.
@@ -134,14 +136,11 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_channels')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('provider', 'meta_cloud')
-      .single()
+    const config = await resolveChannel(supabase, accountId, {
+      channelId: typeof channel_id === 'string' ? channel_id : undefined,
+    })
 
-    if (configError || !config) {
+    if (!config || !config.access_token || !config.phone_number_id) {
       return NextResponse.json(
         {
           error:

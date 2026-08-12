@@ -154,6 +154,7 @@ export async function POST(request: Request) {
         .select('*')
         .eq('account_id', accountId)
         .eq('provider', 'meta_cloud')
+        .eq('is_default', true)
         .single()
       if (configError || !config) {
         return NextResponse.json(

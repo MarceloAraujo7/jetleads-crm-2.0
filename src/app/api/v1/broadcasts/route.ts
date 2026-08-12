@@ -72,6 +72,7 @@ export async function POST(request: Request) {
         to: typeof r?.to === 'string' ? r.to : '',
         params: Array.isArray(r?.params) ? r.params : undefined,
       })),
+      channelId: typeof body.channel_id === 'string' ? body.channel_id : null,
     });
 
     // Fan out after the response is sent. Uses the same service-role

@@ -2,6 +2,7 @@ import { supabaseAdmin } from '@/lib/flows/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { sendTextMessage, sendMediaMessage, type MediaKind } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
+import { resolveChannel } from '@/lib/whatsapp/channel-resolve'
 import type { WhatsAppMessage } from '@/app/api/whatsapp/webhook/route'
 
 export const RELAYABLE_MEDIA_TYPES = new Set(['image', 'video', 'document', 'audio'])
@@ -29,7 +30,7 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
 
   const { data: notification } = await db
     .from('agent_notifications')
-    .select('account_id, conversation_id')
+    .select('account_id, conversation_id, channel_id')
     .eq('meta_message_id', quotedId)
     .maybeSingle()
   if (!notification) return false
@@ -49,12 +50,15 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
     return true // matched a relay message but couldn't act on it — don't fall through to contact creation
   }
 
-  const { data: channel } = await db
-    .from('whatsapp_channels')
-    .select('phone_number_id, access_token')
-    .eq('account_id', notification.account_id)
-    .eq('provider', 'meta_cloud')
-    .maybeSingle()
+  // Reuse the exact channel that sent the notification/forward being
+  // quoted, so the reply goes out through the same number the lead
+  // has been talking to — not a freshly re-resolved (possibly
+  // different) one. Falls back to normal resolution for older rows
+  // saved before `channel_id` existed.
+  const channel = await resolveChannel(db, notification.account_id, {
+    channelId: notification.channel_id ?? undefined,
+    phoneForDdd: notification.channel_id ? undefined : contact.phone,
+  })
   if (!channel?.phone_number_id || !channel.access_token) {
     console.error('[relay-engine] no Meta channel for account:', notification.account_id)
     return true

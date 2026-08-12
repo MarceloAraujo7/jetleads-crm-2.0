@@ -61,6 +61,7 @@ export async function GET() {
     .select('*')
     .eq('account_id', accountId)
     .eq('provider', 'meta_cloud')
+    .eq('is_default', true)
     .maybeSingle()
 
   if (!config) {

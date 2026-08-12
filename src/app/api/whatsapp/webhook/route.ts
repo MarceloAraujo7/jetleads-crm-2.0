@@ -305,7 +305,11 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // inserts that need it for NOT NULL FK compliance. Always
           // the admin who saved the WhatsApp config.
           config.user_id,
-          decryptedAccessToken
+          decryptedAccessToken,
+          // Which number this arrived on (multi-number accounts) —
+          // stamped on a newly-created conversation so outbound sends
+          // and agent notifications stay anchored to the same number.
+          config.id
         )
       }
     }
@@ -573,7 +577,9 @@ async function processMessage(
   // (contacts, conversations). Always the admin who saved the
   // WhatsApp config; the choice is arbitrary post-017 but stable.
   configOwnerUserId: string,
-  accessToken: string
+  accessToken: string,
+  // Multi-number: the whatsapp_channels.id this message arrived on.
+  channelId: string
 ) {
   // Relay Proxy: an agent quote-replying (on their own personal
   // WhatsApp) to a handoff notification or forwarded customer reply
@@ -609,7 +615,8 @@ async function processMessage(
   const convResult = await findOrCreateConversation(
     accountId,
     configOwnerUserId,
-    contactRecord.id
+    contactRecord.id,
+    channelId
   )
   if (!convResult) return
   const conversation = convResult.conversation
@@ -741,6 +748,7 @@ async function processMessage(
       message,
       contentType,
       contentText,
+      conversation.channel_id,
     ).catch((err) => console.error('[webhook] forwardCustomerReplyToAgent failed:', err))
   }
 
@@ -1083,6 +1091,7 @@ async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  channelId: string,
 ) {
   // Look for an existing conversation in this account, oldest-first.
   //
@@ -1122,6 +1131,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      channel_id: channelId,
     })
     .select()
     .single()

@@ -29,6 +29,7 @@ import {
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
+import { resolveChannel } from '@/lib/whatsapp/channel-resolve';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
 export class BroadcastError extends Error {
@@ -54,6 +55,8 @@ export interface CreateBroadcastParams {
   templateName: string;
   templateLanguage?: string | null;
   recipients: BroadcastRecipientInput[];
+  /** Send from this specific number instead of the account default. */
+  channelId?: string | null;
 }
 
 interface PlannedRecipient {
@@ -88,7 +91,7 @@ export async function createBroadcast(
   auditUserId: string,
   params: CreateBroadcastParams
 ): Promise<BroadcastPlan> {
-  const { name, templateName, recipients } = params;
+  const { name, templateName, recipients, channelId } = params;
   const templateLanguage = params.templateLanguage || 'en_US';
 
   if (!templateName) {
@@ -109,15 +112,12 @@ export async function createBroadcast(
     );
   }
 
-  // Config (fail fast + provides the audit trail owner already resolved
-  // by the caller). Meta send needs phone_number_id + decrypted token.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_channels')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('provider', 'meta_cloud')
-    .single();
-  if (configError || !config) {
+  // Channel (fail fast + provides the audit trail owner already
+  // resolved by the caller). Meta send needs phone_number_id +
+  // decrypted token. Explicit `channelId` picks a specific number
+  // (multi-number accounts); otherwise the account default.
+  const config = await resolveChannel(db, accountId, { channelId: channelId ?? undefined });
+  if (!config || !config.access_token || !config.phone_number_id) {
     throw new BroadcastError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -204,6 +204,7 @@ export async function createBroadcast(
       template_language: templateLanguage,
       status: 'sending',
       total_recipients: deduped.length,
+      channel_id: config.id,
     })
     .select('id')
     .single();

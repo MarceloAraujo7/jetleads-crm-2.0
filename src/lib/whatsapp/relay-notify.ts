@@ -1,21 +1,25 @@
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { sendTemplateMessage, sendTextMessage, sendMediaMessage, type MediaKind } from '@/lib/whatsapp/meta-api'
 import { RELAYABLE_MEDIA_TYPES } from '@/lib/whatsapp/relay-engine'
+import { resolveChannel } from '@/lib/whatsapp/channel-resolve'
 import type { WhatsAppMessage } from '@/app/api/whatsapp/webhook/route'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 /**
- * Shared lookup: the agent's personal phone + the account's Meta
- * channel (decrypted token). Both `notifyAgentOfHandoff` and
- * `forwardCustomerReplyToAgent` send TO the agent, so they need the
- * same two things resolved the same way.
+ * Shared lookup: the agent's personal phone + which Meta channel to
+ * send from. Both `notifyAgentOfHandoff` and `forwardCustomerReplyToAgent`
+ * send TO the agent about a specific lead, so they resolve the number
+ * the same way: the conversation's own channel if it's already
+ * anchored to one, else DDD-routed by the lead's phone, else the
+ * account default — same as any other outbound send.
  */
 async function resolveAgentAndChannel(
   db: SupabaseClient,
   accountId: string,
   agentUserId: string,
-): Promise<{ agentPhone: string; phoneNumberId: string; accessToken: string } | null> {
+  opts: { channelId?: string | null; leadPhone?: string | null } = {},
+): Promise<{ agentPhone: string; phoneNumberId: string; accessToken: string; channelId: string } | null> {
   const { data: profile } = await db
     .from('profiles')
     .select('personal_phone')
@@ -27,12 +31,10 @@ async function resolveAgentAndChannel(
     return null
   }
 
-  const { data: channel } = await db
-    .from('whatsapp_channels')
-    .select('phone_number_id, access_token')
-    .eq('account_id', accountId)
-    .eq('provider', 'meta_cloud')
-    .maybeSingle()
+  const channel = await resolveChannel(db, accountId, {
+    channelId: opts.channelId ?? undefined,
+    phoneForDdd: opts.leadPhone ?? undefined,
+  })
   if (!channel?.phone_number_id || !channel.access_token) {
     console.warn(`[relay-notify] account ${accountId} has no Meta channel configured — skipping.`)
     return null
@@ -42,6 +44,7 @@ async function resolveAgentAndChannel(
     agentPhone,
     phoneNumberId: channel.phone_number_id,
     accessToken: decrypt(channel.access_token),
+    channelId: channel.id,
   }
 }
 
@@ -66,7 +69,7 @@ export async function notifyAgentOfHandoff(
 
   const { data: conversation } = await db
     .from('conversations')
-    .select('id, account_id, ai_handoff_summary, contact:contacts(name, phone)')
+    .select('id, account_id, channel_id, ai_handoff_summary, contact:contacts(name, phone)')
     .eq('id', conversationId)
     .maybeSingle()
   if (!conversation) return
@@ -78,9 +81,12 @@ export async function notifyAgentOfHandoff(
   const leadName = contact?.name || contact?.phone || 'Lead'
   const summary = (conversation.ai_handoff_summary as string | null) || 'Sem resumo disponível.'
 
-  const resolved = await resolveAgentAndChannel(db, accountId, agentUserId)
+  const resolved = await resolveAgentAndChannel(db, accountId, agentUserId, {
+    channelId: conversation.channel_id as string | null,
+    leadPhone: contact?.phone,
+  })
   if (!resolved) return
-  const { agentPhone, phoneNumberId, accessToken } = resolved
+  const { agentPhone, phoneNumberId, accessToken, channelId } = resolved
 
   try {
     const result = await sendTemplateMessage({
@@ -97,6 +103,7 @@ export async function notifyAgentOfHandoff(
       conversation_id: conversationId,
       agent_user_id: agentUserId,
       meta_message_id: result.messageId,
+      channel_id: channelId,
     })
   } catch (err) {
     console.error('[relay-notify] failed to notify agent:', err)
@@ -121,12 +128,13 @@ export async function forwardCustomerReplyToAgent(
   message: WhatsAppMessage,
   contentType: string,
   contentText: string | null,
+  channelId?: string | null,
 ): Promise<void> {
   const db = supabaseAdmin()
 
-  const resolved = await resolveAgentAndChannel(db, accountId, agentUserId)
+  const resolved = await resolveAgentAndChannel(db, accountId, agentUserId, { channelId })
   if (!resolved) return
-  const { agentPhone, phoneNumberId, accessToken } = resolved
+  const { agentPhone, phoneNumberId, accessToken, channelId: resolvedChannelId } = resolved
 
   try {
     let waMessageId: string
@@ -166,6 +174,7 @@ export async function forwardCustomerReplyToAgent(
       conversation_id: conversationId,
       agent_user_id: agentUserId,
       meta_message_id: waMessageId,
+      channel_id: resolvedChannelId,
     })
   } catch (err) {
     console.error('[relay-notify] failed to forward customer reply to agent:', err)
