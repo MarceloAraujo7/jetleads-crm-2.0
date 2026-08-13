@@ -98,6 +98,16 @@ export function canViewOnly(role: AccountRole): boolean {
   return role === "viewer";
 }
 
+/**
+ * Owner / admin: run a broadcast with no explicit channel — either a
+ * broad/ambiguous audience or a number not assigned to the caller.
+ * Agents may still broadcast through a number `assigned_agent_id`'d
+ * to them (see the multi-number Fase 3 plan) without this.
+ */
+export function canRunUnscopedBroadcast(role: AccountRole): boolean {
+  return hasMinRole(role, "admin");
+}
+
 /** Owner only: irreversible destructive operations. */
 export function canDeleteAccount(role: AccountRole): boolean {
   return role === "owner";

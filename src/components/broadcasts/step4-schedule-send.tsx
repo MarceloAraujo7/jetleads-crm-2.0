@@ -16,6 +16,13 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface AudienceConfig {
   type: string;
@@ -23,11 +30,20 @@ interface AudienceConfig {
   csvContacts?: { phone: string; name?: string }[];
 }
 
+interface ChannelOption {
+  id: string;
+  label: string | null;
+  phone_number_id: string | null;
+  is_default: boolean;
+}
+
 interface Step4Props {
   name: string;
   onNameChange: (name: string) => void;
   template: MessageTemplate;
   audience: AudienceConfig;
+  channelId: string | null;
+  onChannelIdChange: (channelId: string | null) => void;
   onSend: () => void;
   onSaveDraft?: () => void;
   onBack: () => void;
@@ -40,6 +56,8 @@ export function Step4ScheduleSend({
   onNameChange,
   template,
   audience,
+  channelId,
+  onChannelIdChange,
   onSend,
   onSaveDraft,
   onBack,
@@ -50,6 +68,26 @@ export function Step4ScheduleSend({
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
+  const [channels, setChannels] = useState<ChannelOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/whatsapp/channels', { method: 'GET' });
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data.channels)) {
+          setChannels(data.channels);
+        }
+      } catch {
+        // Silently keep the default-only send path — the channel
+        // picker just won't render if this fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     async function calculateReach() {
@@ -111,6 +149,34 @@ export function Step4ScheduleSend({
           className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
         />
       </div>
+
+      {/* Number picker — only worth showing once there's more than one
+          connected number; a single-channel account always just uses
+          the account default. */}
+      {channels.length > 1 && (
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">
+            {t('scheduleSend.sendFromNumber')}
+          </label>
+          <Select
+            value={channelId ?? '__default__'}
+            onValueChange={(v) => onChannelIdChange(v === '__default__' ? null : v)}
+          >
+            <SelectTrigger className="w-full bg-muted border-border text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__default__">{t('scheduleSend.sendFromDefault')}</SelectItem>
+              {channels.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.label || c.phone_number_id || c.id}
+                  {c.is_default ? ` (${t('scheduleSend.sendFromDefaultTag')})` : ''}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
 
       {/* Summary Card */}
       <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">

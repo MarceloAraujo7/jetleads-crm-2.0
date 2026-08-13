@@ -359,9 +359,9 @@
         "custom": "Campos personalizados",
         "deals": "Negócios",
         "tags": "Tags",
-      "noTags": "Nenhuma tag",
-      "noDeals": "Nenhum negócio",
-      "addNotePlaceholder": "Adicionar uma nota..."
+        "noTags": "Nenhuma tag",
+        "noDeals": "Nenhum negócio",
+        "addNotePlaceholder": "Adicionar uma nota..."
       },
       "actions": {
         "edit": "Editar",
@@ -601,10 +601,13 @@
         "delivery": "Entrega",
         "read": "Lido",
         "status": "Status",
-        "date": "Data"
+        "date": "Data",
+        "channel": "Número",
+        "channelDefault": "Padrão"
       },
       "errorLoad": "Falha ao carregar disparos",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "inProgress": "{count} {count, plural, =1 {campanha} other {campanhas}} em andamento"
     },
     "status": {
       "draft": "Rascunho",
@@ -764,7 +767,10 @@
         "sending": "Enviando...",
         "preparing": "Preparando...",
         "progressDesc": "Processando {current} de {total} destinatários...",
-        "toastFailedPreview": "Falha ao carregar dados de pré-visualização"
+        "toastFailedPreview": "Falha ao carregar dados de pré-visualização",
+        "sendFromNumber": "Enviar pelo número",
+        "sendFromDefault": "Padrão da conta",
+        "sendFromDefaultTag": "padrão"
       }
     }
   },
@@ -1331,13 +1337,11 @@
       "deleteLocallyAria": "Excluir modelo localmente",
       "deleteMetaLocallyTitle": "Excluir da Meta e localmente",
       "deleteLocallyTitle": "Excluir localmente",
-
       "dialogEditTitle": "Editar modelo de mensagem",
       "dialogNewTitle": "Novo modelo de mensagem",
       "dialogEditDesc": "Salve suas alterações para reenviar à Meta. O status voltará para PENDENTE durante a revisão.",
       "dialogNewDesc": "Crie um modelo e envie-o para aprovação da Meta. Depois de aprovado, você pode usá-lo em disparos e na caixa de entrada.",
       "authWarning": "Modelos AUTHENTICATION têm um formato fixo de corpo + botão de OTP que precisa de um construtor diferente. Crie-os no Meta WhatsApp Manager por enquanto e use <bold>Sincronizar da Meta</bold> para trazê-los.",
-
       "templateName": "Nome do modelo",
       "namePlaceholder": "ex.: confirmacao_pedido",
       "nameFixed": "O nome fica fixo assim que o modelo existe na Meta — crie um novo modelo para alterá-lo.",
@@ -1346,7 +1350,6 @@
       "language": "Idioma",
       "langFixed": "O idioma fica fixo assim que o modelo existe na Meta.",
       "langHint": "Deve corresponder exatamente ao código na Meta — <code>en_US</code> e <code>en</code> são distintos.",
-
       "header": "Cabeçalho",
       "headerNone": "Nenhum",
       "headerText": "Texto",
@@ -1356,7 +1359,6 @@
       "headerTextPlaceholder": "Texto do cabeçalho (máx. 60 caracteres, {{1}} opcional)",
       "headerSampleAria": "Valor de exemplo para a variável do cabeçalho",
       "headerSamplePlaceholder": "Valor de exemplo para {{1}} (obrigatório para revisão da Meta)",
-
       "uploadImage": "Enviar imagem",
       "uploadHint": "JPEG ou PNG, ≤5 MB",
       "mediaUrlPlaceholder": "https://… (ou cole um link público {format})",
@@ -1364,17 +1366,14 @@
       "mediaHint": "Deve ser um link HTTPS publicamente acessível. A Meta o busca uma vez durante a revisão, então ele precisa continuar ativo por ~24h.",
       "videoHint": " Recomendado: MP4 / 3GPP, ≤16 MB, ≤60 segundos.",
       "documentHint": " Recomendado: PDF, ≤100 MB.",
-
       "bodyText": "Texto do corpo",
       "bodyPlaceholder": "Olá {{1}}, seu pedido {{2}} está confirmado.",
       "bodyHint": "Use {{1}}, {{2}} para variáveis (devem ser contínuas a partir de {{1}}).",
       "sampleValues": "Valores de exemplo (a Meta usa isso para revisar seu modelo)",
       "sampleAria": "Valor de exemplo para a variável do corpo {var}",
       "samplePlaceholder": "Exemplo para {var}",
-
       "footer": "Rodapé (opcional)",
       "footerPlaceholder": "Texto de rodapé opcional (máx. 60 caracteres)",
-
       "buttons": "Botões (opcional)",
       "addButton": "Adicionar botão",
       "buttonsLimit": "Até {max} botões. Botões QUICK_REPLY devem vir antes dos botões de URL / telefone / código de cópia.",
@@ -1387,19 +1386,16 @@
       "urlSamplePlaceholder": "Valor de exemplo para {{1}} (obrigatório quando a URL tem uma variável)",
       "phonePlaceholder": "+5511999999999",
       "codePlaceholder": "Código de exemplo (ex.: VERAO20)",
-
       "cancel": "Cancelar",
       "saving": "Salvando…",
       "submitting": "Enviando…",
       "saveResubmit": "Salvar e reenviar",
       "submitApproval": "Enviar para aprovação",
-
       "deleteDialogTitle": "Excluir modelo?",
       "deleteMetaDesc": "\"{name}\" será excluído da Meta e do wacrm. Disparos ativos que usam este modelo vão começar a falhar no próximo envio. Isso não pode ser desfeito.",
       "deleteLocalDesc": "\"{name}\" será excluído do wacrm. Ele nunca foi enviado à Meta, então nenhuma limpeza remota é necessária.",
       "deleting": "Excluindo…",
       "delete": "Excluir",
-
       "toastLoadFailed": "Falha ao carregar modelos",
       "toastSubmitFailed": "Falha ao enviar",
       "toastSubmitEditSuccess": "Edição enviada — a Meta normalmente revisa em até 24 horas.",
@@ -1492,7 +1488,31 @@
       "step4_3": "Cole a <strong class=\"text-foreground\">URL de callback do webhook</strong> acima",
       "step4_4": "Informe o mesmo <strong class=\"text-foreground\">Token de verificação</strong> definido aqui",
       "step4_5": "Inscreva-se no campo de webhook \"messages\"",
-      "metaDocs": "Documentação da API do WhatsApp da Meta"
+      "metaDocs": "Documentação da API do WhatsApp da Meta",
+      "channelsListTitle": "Números conectados",
+      "addNumber": "Adicionar número",
+      "noChannelsYet": "Nenhum número do WhatsApp conectado ainda.",
+      "unnamedChannel": "Número sem nome",
+      "defaultBadge": "Padrão",
+      "setAsDefault": "Definir como padrão",
+      "setAsDefaultSuccess": "Número padrão atualizado.",
+      "manage": "Gerenciar",
+      "registeredShort": "Registrado",
+      "notRegisteredShort": "Não registrado",
+      "backToList": "Voltar para números",
+      "newChannelTitle": "Adicionar número",
+      "editChannelTitle": "Gerenciar número",
+      "channelDetailsTitle": "Detalhes do número",
+      "channelDetailsDesc": "Um nome para identificar este número e, opcionalmente, o DDD que ele deve atender.",
+      "channelLabel": "Nome",
+      "channelLabelPlaceholder": "ex.: Loja Centro",
+      "channelDdd": "Código de área (DDD)",
+      "channelDddPlaceholder": "ex.: 11",
+      "channelDddHint": "Leads com esse DDD são roteados por este número. Deixe em branco para um número genérico/reserva.",
+      "cancel": "Cancelar",
+      "deleteChannel": "Remover número",
+      "deleteChannelConfirm": "Isso vai remover este número do WhatsApp da sua conta. Continuar?",
+      "deleteChannelSuccess": "Número removido."
     },
     "sections": {
       "overview": "Visão geral",
@@ -1539,7 +1559,6 @@
       "profileSaved": "Perfil salvo",
       "emailChangeFailed": "Falha na alteração de e-mail: {message}",
       "profileSavedEmailCheck": "Perfil salvo — confira seu e-mail para confirmar a alteração de endereço",
-
       "passwordTitle": "Senha",
       "passwordDesc": "Use pelo menos {min} caracteres. Você continuará conectado neste dispositivo após alterá-la.",
       "currentPassword": "Senha atual",
@@ -1553,7 +1572,6 @@
       "currentPasswordIncorrect": "A senha atual está incorreta",
       "passwordUpdateFailed": "Falha ao atualizar a senha: {message}",
       "passwordUpdated": "Senha atualizada",
-
       "sessionsTitle": "Sessões ativas",
       "sessionsDesc": "Desconecte todos os dispositivos em que você está logado — inclusive este. Útil se você perdeu um laptop ou compartilhou sua senha.",
       "signOutAll": "Sair de todos os dispositivos",

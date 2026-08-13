@@ -19,6 +19,12 @@ import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
 import { useTranslations } from 'next-intl';
 
+interface ChannelOption {
+  id: string;
+  label: string | null;
+  phone_number_id: string | null;
+}
+
 /**
  * Poll cadence while any broadcast is sending. Kept modest so we don't
  * beat on Supabase — the aggregate trigger in migration 003 keeps
@@ -65,6 +71,7 @@ export default function BroadcastsPage() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [channels, setChannels] = useState<ChannelOption[]>([]);
 
   // Used to kick off polling only while something is actively sending.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -88,12 +95,31 @@ export default function BroadcastsPage() {
 
   useEffect(() => {
     fetchBroadcasts();
+    (async () => {
+      try {
+        const res = await fetch('/api/whatsapp/channels', { method: 'GET' });
+        const data = await res.json();
+        if (Array.isArray(data.channels)) setChannels(data.channels);
+      } catch {
+        // Channel column just won't render a label; not worth failing the page.
+      }
+    })();
   }, []);
 
   const anySending = useMemo(
     () => broadcasts.some((b) => b.status === 'sending'),
     [broadcasts],
   );
+  const sendingCount = useMemo(
+    () => broadcasts.filter((b) => b.status === 'sending').length,
+    [broadcasts],
+  );
+  const channelLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of channels) map.set(c.id, c.label || c.phone_number_id || c.id);
+    return map;
+  }, [channels]);
+  const showChannelColumn = channels.length > 1;
 
   useEffect(() => {
     function startPolling() {
@@ -186,6 +212,15 @@ export default function BroadcastsPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             {t('subtitle')}
           </p>
+          {sendingCount > 0 && (
+            <span className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-0.5 text-xs font-medium text-yellow-500">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
+              </span>
+              {t('inProgress', { count: sendingCount })}
+            </span>
+          )}
         </div>
         <GatedButton
           canAct={canCreate}
@@ -227,6 +262,9 @@ export default function BroadcastsPage() {
                 </TableHead>
                 <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.delivery')}</TableHead>
                 <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.read')}</TableHead>
+                {showChannelColumn && (
+                  <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.channel')}</TableHead>
+                )}
                 <TableHead className="text-muted-foreground">{t('table.status')}</TableHead>
                 <TableHead className="hidden text-muted-foreground sm:table-cell">{t('table.date')}</TableHead>
               </TableRow>
@@ -263,6 +301,13 @@ export default function BroadcastsPage() {
                         color="bg-blue-500"
                       />
                     </TableCell>
+                    {showChannelColumn && (
+                      <TableCell className="hidden text-muted-foreground lg:table-cell">
+                        {broadcast.channel_id
+                          ? channelLabelById.get(broadcast.channel_id) ?? '—'
+                          : t('table.channelDefault')}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <span
                         className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}

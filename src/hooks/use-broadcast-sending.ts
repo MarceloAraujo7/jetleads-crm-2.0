@@ -46,6 +46,8 @@ interface BroadcastPayload {
    * falls back to the template's stored URL only when this is empty.
    */
   headerMediaUrl?: string;
+  /** Send from this specific number instead of the account default. */
+  channelId?: string | null;
 }
 
 interface UseBroadcastSendingReturn {
@@ -368,6 +370,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             customField: payload.audience.customField,
             excludeTagIds: payload.audience.excludeTagIds,
           },
+          channel_id: payload.channelId || null,
           status: 'sending',
           total_recipients: contacts.length,
           sent_count: 0,
@@ -481,6 +484,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               recipients: apiRecipients,
               template_name: payload.template.name,
               template_language: payload.template.language ?? 'en_US',
+              channel_id: payload.channelId || undefined,
             }),
           });
 

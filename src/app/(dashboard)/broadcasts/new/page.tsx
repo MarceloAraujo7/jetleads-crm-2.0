@@ -45,6 +45,7 @@ export default function NewBroadcastPage() {
   >({});
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
+  const [channelId, setChannelId] = useState<string | null>(null);
 
   async function handleSend() {
     if (!template) return;
@@ -62,6 +63,7 @@ export default function NewBroadcastPage() {
         },
         variables,
         headerMediaUrl,
+        channelId,
       });
       router.push(`/broadcasts/${broadcastId}`);
     } catch (err) {
@@ -112,6 +114,7 @@ export default function NewBroadcastPage() {
         type: audience.type,
         tagIds: audience.tagIds,
       },
+      channel_id: channelId || null,
       status: 'draft',
       total_recipients: 0,
       sent_count: 0,
@@ -221,6 +224,8 @@ export default function NewBroadcastPage() {
               onNameChange={setName}
               template={template}
               audience={audience}
+              channelId={channelId}
+              onChannelIdChange={setChannelId}
               onSend={handleSend}
               onSaveDraft={handleSaveDraft}
               onBack={() => setCurrentStep(2)}
