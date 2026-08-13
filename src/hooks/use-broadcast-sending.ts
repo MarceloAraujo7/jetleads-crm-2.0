@@ -48,6 +48,12 @@ interface BroadcastPayload {
   headerMediaUrl?: string;
   /** Send from this specific number instead of the account default. */
   channelId?: string | null;
+  /**
+   * Marks this campaign for the dashboard's invite widgets and the
+   * webhook's RSVP correlation (`broadcast_recipients.rsvp_choice`).
+   * Null/undefined for a regular broadcast — no behavior change.
+   */
+  campaignKind?: 'event_invite' | null;
 }
 
 interface UseBroadcastSendingReturn {
@@ -371,6 +377,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             excludeTagIds: payload.audience.excludeTagIds,
           },
           channel_id: payload.channelId || null,
+          campaign_kind: payload.campaignKind || null,
           status: 'sending',
           total_recipients: contacts.length,
           sent_count: 0,

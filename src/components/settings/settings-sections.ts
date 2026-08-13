@@ -45,6 +45,13 @@ export interface SectionMeta {
   label: string;
   icon: LucideIcon;
   group: 'top' | 'account' | 'workspace';
+  /**
+   * True for sections promoted to a direct sidebar link (WhatsApp,
+   * Templates, Team members) — the section itself still resolves and
+   * renders normally via `?tab=`, it's just no longer listed in this
+   * rail since the sidebar is now the primary entry point.
+   */
+  hiddenFromRail?: boolean;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
@@ -52,12 +59,12 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
   security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
-  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
-  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
+  whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace', hiddenFromRail: true },
+  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace', hiddenFromRail: true },
   'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
-  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
+  members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace', hiddenFromRail: true },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
 

@@ -21,6 +21,53 @@ const steps = [
   { label: 'send', key: 'send' },
 ] as const;
 
+type AudienceState = {
+  type: 'all' | 'tags' | 'custom_field' | 'csv';
+  tagIds?: string[];
+  customField?: {
+    fieldId: string;
+    operator: 'is' | 'is_not' | 'contains';
+    value: string;
+  };
+  csvContacts?: { phone: string; name?: string }[];
+  excludeTagIds?: string[];
+};
+
+const INVITE_PREFILL_KEY = 'broadcast-invite-prefill';
+
+/**
+ * One-shot read of the "Enviar convite" handoff from the Contacts
+ * page (see contacts/page.tsx `handleSendInvite`) — a CSV-shaped
+ * audience plus the `event_invite` campaign marker. Read once via a
+ * lazy useState initializer rather than an effect so the wizard opens
+ * already on the right audience instead of flashing "All contacts"
+ * first.
+ */
+function readInvitePrefill(): { audience: AudienceState; campaignKind: 'event_invite' | null } {
+  const fallback: { audience: AudienceState; campaignKind: 'event_invite' | null } = {
+    audience: { type: 'all' },
+    campaignKind: null,
+  };
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = sessionStorage.getItem(INVITE_PREFILL_KEY);
+    if (!raw) return fallback;
+    // Consume exactly once — a later fresh visit to /broadcasts/new
+    // (e.g. via "New Broadcast") must not re-apply a stale prefill.
+    sessionStorage.removeItem(INVITE_PREFILL_KEY);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed.csvContacts) && parsed.csvContacts.length > 0) {
+      return {
+        audience: { type: 'csv', csvContacts: parsed.csvContacts },
+        campaignKind: parsed.campaignKind === 'event_invite' ? 'event_invite' : null,
+      };
+    }
+  } catch {
+    // Malformed/stale payload — ignore and fall back to the normal empty wizard.
+  }
+  return fallback;
+}
+
 export default function NewBroadcastPage() {
   const router = useRouter();
   const t = useTranslations('Broadcasts.new');
@@ -29,17 +76,9 @@ export default function NewBroadcastPage() {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
-  const [audience, setAudience] = useState<{
-    type: 'all' | 'tags' | 'custom_field' | 'csv';
-    tagIds?: string[];
-    customField?: {
-      fieldId: string;
-      operator: 'is' | 'is_not' | 'contains';
-      value: string;
-    };
-    csvContacts?: { phone: string; name?: string }[];
-    excludeTagIds?: string[];
-  }>({ type: 'all' });
+  const [invitePrefill] = useState(readInvitePrefill);
+  const [audience, setAudience] = useState<AudienceState>(invitePrefill.audience);
+  const [campaignKind] = useState<'event_invite' | null>(invitePrefill.campaignKind);
   const [variables, setVariables] = useState<
     Record<string, { type: 'static' | 'field' | 'custom_field'; value: string }>
   >({});
@@ -64,6 +103,7 @@ export default function NewBroadcastPage() {
         variables,
         headerMediaUrl,
         channelId,
+        campaignKind,
       });
       router.push(`/broadcasts/${broadcastId}`);
     } catch (err) {
@@ -115,6 +155,7 @@ export default function NewBroadcastPage() {
         tagIds: audience.tagIds,
       },
       channel_id: channelId || null,
+      campaign_kind: campaignKind,
       status: 'draft',
       total_recipients: 0,
       sent_count: 0,

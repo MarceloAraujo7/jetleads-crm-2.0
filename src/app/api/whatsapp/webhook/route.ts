@@ -451,10 +451,21 @@ async function handleStatusUpdate(status: {
  * broadcast_recipients row, flip it to `replied` so the reply count
  * advances on the parent broadcast.
  *
+ * When the tap can be attributed to a button (`rsvpChoice` — the
+ * human-readable title, e.g. "Confirmar presença") AND that broadcast
+ * is an `event_invite` campaign, also stamp `rsvp_choice` on the row
+ * so the dashboard can count confirmed vs. declined per campaign,
+ * scoped to exactly this recipient's own tap (not just "someone
+ * replied").
+ *
  * Runs on a best-effort basis — failures here must not break the
  * main inbound-message flow, so errors are swallowed with a log.
  */
-async function flagBroadcastReplyIfAny(accountId: string, contactId: string) {
+async function flagBroadcastReplyIfAny(
+  accountId: string,
+  contactId: string,
+  rsvpChoice?: string | null,
+) {
   try {
     // Most recent outbound broadcast in this account that hasn't
     // been replied to yet. Account-scoped so a shared inbox reply
@@ -462,7 +473,7 @@ async function flagBroadcastReplyIfAny(accountId: string, contactId: string) {
     // sent it.
     const { data: recs, error } = await supabaseAdmin()
       .from('broadcast_recipients')
-      .select('id, status, broadcast_id, broadcasts!inner(account_id)')
+      .select('id, status, broadcast_id, broadcasts!inner(account_id, campaign_kind)')
       .eq('contact_id', contactId)
       .eq('broadcasts.account_id', accountId)
       .in('status', ['sent', 'delivered', 'read'])
@@ -471,10 +482,22 @@ async function flagBroadcastReplyIfAny(accountId: string, contactId: string) {
 
     if (error || !recs || recs.length === 0) return
 
-    const row = recs[0]
+    const row = recs[0] as unknown as {
+      id: string
+      broadcasts: { campaign_kind: string | null } | { campaign_kind: string | null }[]
+    }
+    const broadcastMeta = Array.isArray(row.broadcasts) ? row.broadcasts[0] : row.broadcasts
+    const update: Record<string, unknown> = {
+      status: 'replied',
+      replied_at: new Date().toISOString(),
+    }
+    if (rsvpChoice && broadcastMeta?.campaign_kind === 'event_invite') {
+      update.rsvp_choice = rsvpChoice
+    }
+
     const { error: updErr } = await supabaseAdmin()
       .from('broadcast_recipients')
-      .update({ status: 'replied', replied_at: new Date().toISOString() })
+      .update(update)
       .eq('id', row.id)
 
     if (updErr) {
@@ -733,8 +756,14 @@ async function processMessage(
 
   // If this contact was a recent broadcast recipient, flag the reply
   // so the broadcast's `replied_count` advances (via the aggregate
-  // trigger installed in migration 003).
-  await flagBroadcastReplyIfAny(accountId, contactRecord.id)
+  // trigger installed in migration 003). `contentText` is the tapped
+  // button's title for interactive replies (see parseMessageContent) —
+  // pass it through so an event_invite campaign can record the RSVP.
+  await flagBroadcastReplyIfAny(
+    accountId,
+    contactRecord.id,
+    interactiveReplyId ? contentText : null,
+  )
 
   // Relay Proxy: a human is already on this thread — forward the
   // customer's message to the assigned agent's own WhatsApp so they

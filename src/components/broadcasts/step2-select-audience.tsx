@@ -341,6 +341,14 @@ export function Step2SelectAudience({
         </div>
       )}
 
+      {audience.type === 'csv' && audience.csvContacts && audience.csvContacts.length > 0 && (
+        <div className="rounded-xl border border-border bg-card/50 p-4">
+          <p className="text-sm text-foreground">
+            {t('selectAudience.csvContactsFound', { count: audience.csvContacts.length })}
+          </p>
+        </div>
+      )}
+
       {audience.type === 'custom_field' && (
         <div className="space-y-3 rounded-xl border border-border bg-card/50 p-4">
           <p className="text-sm font-medium text-foreground">{t('selectAudience.method.customField')}</p>

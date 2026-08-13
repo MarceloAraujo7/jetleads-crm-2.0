@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
@@ -11,10 +11,12 @@ import {
   Bell,
   Bot,
   Crown,
+  FileText,
   GitBranch,
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  PlugZap,
   Radio,
   Settings,
   Shield,
@@ -87,6 +89,14 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /**
+   * For items that point into Settings via `?tab=` (WhatsApp, Templates,
+   * Team members — promoted here for direct access instead of being
+   * buried in the Settings rail): the tab value to match against the
+   * current URL for active-state highlighting, since `pathname` alone
+   * can't distinguish between `/settings` tabs.
+   */
+  matchTab?: string;
 }
 
 const navItems: NavItem[] = [
@@ -99,11 +109,38 @@ const navItems: NavItem[] = [
   { href: "/automations", labelKey: "automations", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
+  { href: "/settings?tab=whatsapp", labelKey: "whatsapp", icon: PlugZap, matchTab: "whatsapp" },
+  { href: "/settings?tab=templates", labelKey: "templates", icon: FileText, matchTab: "templates" },
+  { href: "/settings?tab=members", labelKey: "team", icon: UsersRound, matchTab: "members" },
 ];
 
 const bottomNavItems = [
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
+
+// Tabs promoted to their own top-level sidebar link — the bottom
+// "Settings" link should stop claiming "active" for these, since each
+// now highlights independently.
+const PROMOTED_SETTINGS_TABS = new Set(["whatsapp", "templates", "members"]);
+
+/**
+ * Reads the current `?tab=` value and reports it up. Isolated in its
+ * own component (rather than calling `useSearchParams()` directly in
+ * `Sidebar`) because that hook opts the nearest Suspense boundary out
+ * of static rendering — `Sidebar` renders on every dashboard page via
+ * the shared layout, so hooking it there would force the whole
+ * dashboard dynamic. Scoping the Suspense boundary to just this small
+ * watcher keeps that cost local. Mirrors the same fix already applied
+ * in `src/app/(dashboard)/settings/page.tsx`.
+ */
+function CurrentSettingsTab({ onChange }: { onChange: (tab: string | null) => void }) {
+  const searchParams = useSearchParams();
+  const tab = searchParams.get("tab");
+  useEffect(() => {
+    onChange(tab);
+  }, [tab, onChange]);
+  return null;
+}
 
 interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
@@ -116,6 +153,7 @@ import { useTranslations } from "next-intl";
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
+  const [settingsTab, setSettingsTab] = useState<string | null>(null);
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
@@ -158,6 +196,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
   return (
     <>
+      <Suspense fallback={null}>
+        <CurrentSettingsTab onChange={setSettingsTab} />
+      </Suspense>
+
       {/* Backdrop — only exists on mobile and only when open. Clicking
           it closes the drawer. Hidden from lg+ since the sidebar is
           part of the main flex row there. */}
@@ -215,9 +257,10 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
             {navItems.map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              const isActive = item.matchTab
+                ? pathname === "/settings" && settingsTab === item.matchTab
+                : pathname === item.href ||
+                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
 
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
@@ -278,7 +321,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           <ul className="flex flex-col gap-1">
             {bottomNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
+              // Stop claiming "active" for tabs that now have their own
+              // dedicated nav entry above (WhatsApp, Templates, Team).
+              const isActive =
+                pathname.startsWith(item.href) &&
+                !(settingsTab && PROMOTED_SETTINGS_TABS.has(settingsTab));
               return (
                 <li key={item.href}>
                   <Link

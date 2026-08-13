@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag } from '@/types';
@@ -49,6 +50,7 @@ import {
   SlidersHorizontal,
   Filter,
   X,
+  Send,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -66,6 +68,7 @@ interface ContactWithTags extends Contact {
 
 export default function ContactsPage() {
   const t = useTranslations('Contacts.page');
+  const router = useRouter();
   const supabase = createClient();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
@@ -314,6 +317,30 @@ export default function ContactsPage() {
     setBulkDeleteOpen(false);
   }
 
+  // "Enviar convite" — hands the current selection to the broadcast
+  // wizard pre-loaded as a CSV-shaped audience (the wizard already
+  // supports `audience.type === 'csv'` end-to-end; we're just another
+  // producer of that shape). sessionStorage survives the navigation to
+  // /broadcasts/new without the size limits a query string would hit
+  // for a large selection. Selection is page-scoped (see the comment
+  // above `selected`), so every selected id is guaranteed to already
+  // be in the loaded `contacts` array — no extra fetch needed.
+  function handleSendInvite() {
+    const chosen = contacts.filter((c) => selected.has(c.id));
+    const csvContacts = chosen
+      .filter((c): c is ContactWithTags & { phone: string } => Boolean(c.phone))
+      .map((c) => ({ phone: c.phone, name: c.name || undefined }));
+    if (csvContacts.length === 0) {
+      toast.error(t('toastNoPhoneForInvite'));
+      return;
+    }
+    sessionStorage.setItem(
+      'broadcast-invite-prefill',
+      JSON.stringify({ campaignKind: 'event_invite', csvContacts }),
+    );
+    router.push('/broadcasts/new');
+  }
+
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const hasNext = page < totalPages - 1;
   const hasPrev = page > 0;
@@ -513,6 +540,17 @@ export default function ContactsPage() {
             >
               {t('clearSelection')}
             </Button>
+            <GatedButton
+              variant="outline"
+              size="sm"
+              canAct={canEdit}
+              gateReason="send broadcasts"
+              onClick={handleSendInvite}
+              className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <Send className="size-4" />
+              {t('sendInvite')}
+            </GatedButton>
             <GatedButton
               variant="destructive"
               size="sm"

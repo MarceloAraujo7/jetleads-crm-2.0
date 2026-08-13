@@ -38,7 +38,10 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Profile",
     "menuSettings": "Settings",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "whatsapp": "WhatsApp",
+    "templates": "Templates",
+    "team": "Team"
   },
   "Header": {
     "dashboard": "Dashboard",
@@ -71,7 +74,10 @@
       "newTodayVsYesterday": "new today vs yesterday",
       "vsYesterday": "vs yesterday",
       "openDeals": "{count} open {count, plural, =1 {deal} other {deals}}",
-      "noChange": "No change {suffix}"
+      "noChange": "No change {suffix}",
+      "invitesSent": "Invites sent",
+      "invitesConfirmed": "Confirmed",
+      "invitesConfirmedSubtitle": "{rate}% confirmation rate"
     },
     "quickActions": {
       "newContact": "New Contact",
@@ -316,7 +322,9 @@
       "toastFailedDelete": "Failed to delete contact",
       "toastDeleted": "Contact deleted",
       "toastBulkFailedDelete": "Failed to delete contacts",
-      "toastBulkDeleted": "{count} contacts deleted"
+      "toastBulkDeleted": "{count} contacts deleted",
+      "sendInvite": "Send invite",
+      "toastNoPhoneForInvite": "None of the selected contacts have a phone number."
     },
     "form": {
       "addTitle": "Add Contact",
@@ -1412,7 +1420,14 @@
       "toastInvalidImage": "Header image must be a JPEG or PNG.",
       "toastImageTooLarge": "Image is {size} MB — Meta's limit is 5 MB.",
       "toastUploadSuccess": "Image uploaded.",
-      "toastUploadFailed": "Upload failed."
+      "toastUploadFailed": "Upload failed.",
+      "useInvitePreset": "Use invite template",
+      "inviteBtnConfirm": "Confirm attendance",
+      "inviteBtnDecline": "Can't make it",
+      "previewTitle": "Preview",
+      "previewDocument": "Document",
+      "previewBodyPlaceholder": "Your message body will appear here",
+      "previewUntitledButton": "Button"
     },
     "roles": {
       "admin": "Admin",

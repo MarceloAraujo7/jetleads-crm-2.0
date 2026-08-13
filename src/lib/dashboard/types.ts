@@ -13,6 +13,10 @@ export interface MetricsBundle {
   openDealsValue: number
   openDealsCount: number
   messagesSentToday: MetricDelta
+  /** Total recipients across every `campaign_kind='event_invite'` broadcast. */
+  invitesSent: number
+  /** Recipients of an event_invite campaign whose `rsvp_choice` is set. */
+  invitesConfirmed: number
 }
 
 export interface ConversationsSeriesPoint {

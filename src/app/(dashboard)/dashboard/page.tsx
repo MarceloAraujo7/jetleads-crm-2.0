@@ -9,6 +9,8 @@ import {
   UserPlus,
   DollarSign,
   Send,
+  MailPlus,
+  CheckCircle2,
 } from 'lucide-react'
 
 import {
@@ -187,6 +189,29 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* Event-invite widgets — only shown once an account actually has
+          used the "Enviar convite" flow, so accounts that don't run
+          invite campaigns don't see two permanently-zero cards. */}
+      {!metricsLoading && metrics && metrics.invitesSent > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <MetricCard
+            title={t('invitesSent')}
+            value={metrics.invitesSent.toLocaleString()}
+            icon={MailPlus}
+          />
+          <MetricCard
+            title={t('invitesConfirmed')}
+            value={metrics.invitesConfirmed.toLocaleString()}
+            icon={CheckCircle2}
+            subtitle={t('invitesConfirmedSubtitle', {
+              rate: metrics.invitesSent
+                ? Math.round((metrics.invitesConfirmed / metrics.invitesSent) * 100)
+                : 0,
+            })}
+          />
+        </div>
+      )}
 
       {/* Quick actions */}
       <QuickActions />

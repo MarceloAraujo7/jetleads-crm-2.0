@@ -42,6 +42,8 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     openDeals,
     messagesToday,
     messagesYesterday,
+    inviteBroadcasts,
+    confirmedRsvps,
   ] = await Promise.all([
     db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     db
@@ -73,10 +75,21 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .eq('sender_type', 'agent')
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
+    // Event-invite widgets — total_recipients per campaign, summed
+    // client-side below (small row count, one per campaign).
+    db.from('broadcasts').select('total_recipients').eq('campaign_kind', 'event_invite'),
+    db
+      .from('broadcast_recipients')
+      .select('id, broadcasts!inner(campaign_kind)', { count: 'exact', head: true })
+      .eq('broadcasts.campaign_kind', 'event_invite')
+      .not('rsvp_choice', 'is', null),
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
   const openDealsValue = openDealsRows.reduce((sum, d) => sum + (d.value ?? 0), 0)
+
+  const inviteRows = (inviteBroadcasts.data ?? []) as { total_recipients: number | null }[]
+  const invitesSent = inviteRows.reduce((sum, b) => sum + (b.total_recipients ?? 0), 0)
 
   return {
     activeConversations: {
@@ -96,6 +109,8 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       current: messagesToday.count ?? 0,
       previous: messagesYesterday.count ?? 0,
     },
+    invitesSent,
+    invitesConfirmed: confirmedRsvps.count ?? 0,
   }
 }
 

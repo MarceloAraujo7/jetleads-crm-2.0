@@ -12,7 +12,16 @@ import {
   Pencil,
   RotateCcw,
   Upload,
+  MailPlus,
+  Reply,
+  ExternalLink,
+  Phone,
+  Copy,
+  FileText,
+  Film,
+  File as FileIcon,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import {
   uploadAccountMedia,
@@ -122,6 +131,20 @@ function emptyButton(type: TemplateButton['type']): TemplateButton {
     case 'COPY_CODE':
       return { type: 'COPY_CODE', text: '', example: '' };
   }
+}
+
+/**
+ * Substitute `{{n}}` with the matching sample value (falling back to a
+ * bracketed placeholder) — mirrors what Meta's own preview shows while
+ * you're filling in a template, so what you see here is what a
+ * reviewer/recipient actually sees.
+ */
+function renderWithSamples(text: string, samples: string[]): string {
+  return text.replace(/\{\{(\d+)\}\}/g, (match, n) => {
+    const idx = Number(n) - 1;
+    const sample = samples[idx]?.trim();
+    return sample ? sample : match;
+  });
 }
 
 export function TemplateManager() {
@@ -255,6 +278,20 @@ export function TemplateManager() {
     setEditingId(null);
     setForm(emptyForm);
     setDialogOpen(true);
+  }
+
+  // "Convite de evento" preset — pre-fills the two RSVP buttons so the
+  // user only has to write the body/header. Only offered on a fresh
+  // template with no buttons yet, so it never clobbers manual edits.
+  function applyInvitePreset() {
+    setForm((prev) => ({
+      ...prev,
+      category: 'Marketing',
+      buttons: [
+        { type: 'QUICK_REPLY', text: t('inviteBtnConfirm') },
+        { type: 'QUICK_REPLY', text: t('inviteBtnDecline') },
+      ],
+    }));
   }
 
   async function handleSubmit() {
@@ -638,7 +675,7 @@ export function TemplateManager() {
           }
         }}
       >
-        <DialogContent className="bg-popover border-border sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-popover border-border sm:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-popover-foreground">
               {editingId ? t('dialogEditTitle') : t('dialogNewTitle')}
@@ -657,7 +694,21 @@ export function TemplateManager() {
             </div>
           )}
 
-          <div className="space-y-4 py-2">
+          {!editingId && form.buttons.length === 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={applyInvitePreset}
+              className="w-fit border-border bg-transparent text-muted-foreground hover:bg-muted"
+            >
+              <MailPlus className="size-3.5" />
+              {t('useInvitePreset')}
+            </Button>
+          )}
+
+          <div className="grid gap-6 py-2 lg:grid-cols-[1fr_300px]">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('templateName')}</Label>
               <Input
@@ -1051,6 +1102,97 @@ export function TemplateManager() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Live preview — mirrors Meta's own template-creation preview
+              so what gets submitted for review is exactly what's shown
+              here, sample values and all. */}
+          <div className="lg:sticky lg:top-2 lg:self-start">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t('previewTitle')}
+            </p>
+            <div className="rounded-2xl border border-border bg-[#e5ded8] dark:bg-[#0b141a] p-3">
+              <div className="rounded-lg bg-white dark:bg-[#202c33] shadow-sm overflow-hidden">
+                {form.header_format === 'text' && form.header_content && (
+                  <p className="px-3 pt-2.5 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    {renderWithSamples(
+                      form.header_content,
+                      form.header_sample ? [form.header_sample] : [],
+                    )}
+                  </p>
+                )}
+                {form.header_format === 'image' && (
+                  form.header_media_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={form.header_media_url}
+                      alt=""
+                      className="h-32 w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-24 items-center justify-center bg-neutral-200 dark:bg-neutral-700/40 text-neutral-400">
+                      <FileText className="size-6" />
+                    </div>
+                  )
+                )}
+                {form.header_format === 'video' && (
+                  <div className="flex h-24 items-center justify-center bg-neutral-200 dark:bg-neutral-700/40 text-neutral-400">
+                    <Film className="size-6" />
+                  </div>
+                )}
+                {form.header_format === 'document' && (
+                  <div className="flex h-16 items-center gap-2 bg-neutral-200 dark:bg-neutral-700/40 px-3 text-neutral-500">
+                    <FileIcon className="size-5" />
+                    <span className="text-xs">{t('previewDocument')}</span>
+                  </div>
+                )}
+
+                <div className="px-3 py-2.5">
+                  <p className="whitespace-pre-wrap text-sm text-neutral-800 dark:text-neutral-100">
+                    {form.body_text
+                      ? renderWithSamples(form.body_text, form.body_samples)
+                      : (
+                        <span className="text-neutral-400 dark:text-neutral-500">
+                          {t('previewBodyPlaceholder')}
+                        </span>
+                      )}
+                  </p>
+                  {form.footer_text && (
+                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      {form.footer_text}
+                    </p>
+                  )}
+                </div>
+
+                {form.buttons.length > 0 && (
+                  <div className="border-t border-neutral-200 dark:border-neutral-700">
+                    {form.buttons.map((btn, i) => {
+                      const Icon =
+                        btn.type === 'QUICK_REPLY'
+                          ? Reply
+                          : btn.type === 'URL'
+                            ? ExternalLink
+                            : btn.type === 'PHONE_NUMBER'
+                              ? Phone
+                              : Copy;
+                      return (
+                        <div
+                          key={i}
+                          className={cn(
+                            'flex items-center justify-center gap-1.5 px-3 py-2 text-sm text-blue-600 dark:text-blue-400',
+                            i > 0 && 'border-t border-neutral-200 dark:border-neutral-700',
+                          )}
+                        >
+                          <Icon className="size-3.5" />
+                          <span className="truncate">{btn.text || t('previewUntitledButton')}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
           </div>
 
           <DialogFooter className="bg-popover border-border">

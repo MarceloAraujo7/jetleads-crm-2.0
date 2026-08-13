@@ -38,7 +38,10 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
-    "menuSignOut": "Sair"
+    "menuSignOut": "Sair",
+    "whatsapp": "WhatsApp",
+    "templates": "Modelos",
+    "team": "Equipe"
   },
   "Header": {
     "dashboard": "Painel",
@@ -71,7 +74,10 @@
       "newTodayVsYesterday": "novos hoje vs. ontem",
       "vsYesterday": "vs. ontem",
       "openDeals": "{count} {count, plural, =1 {negócio aberto} other {negócios abertos}}",
-      "noChange": "Sem alteração {suffix}"
+      "noChange": "Sem alteração {suffix}",
+      "invitesSent": "Convites enviados",
+      "invitesConfirmed": "Confirmados",
+      "invitesConfirmedSubtitle": "{rate}% de confirmação"
     },
     "quickActions": {
       "newContact": "Novo contato",
@@ -316,7 +322,9 @@
       "toastFailedDelete": "Falha ao excluir contato",
       "toastDeleted": "Contato excluído",
       "toastBulkFailedDelete": "Falha ao excluir contatos",
-      "toastBulkDeleted": "{count} contatos excluídos"
+      "toastBulkDeleted": "{count} contatos excluídos",
+      "sendInvite": "Enviar convite",
+      "toastNoPhoneForInvite": "Nenhum dos contatos selecionados tem telefone cadastrado."
     },
     "form": {
       "addTitle": "Adicionar contato",
@@ -1412,7 +1420,14 @@
       "toastInvalidImage": "A imagem do cabeçalho deve ser JPEG ou PNG.",
       "toastImageTooLarge": "A imagem tem {size} MB — o limite da Meta é 5 MB.",
       "toastUploadSuccess": "Imagem enviada.",
-      "toastUploadFailed": "Falha no envio."
+      "toastUploadFailed": "Falha no envio.",
+      "useInvitePreset": "Usar modelo de convite",
+      "inviteBtnConfirm": "Confirmar presença",
+      "inviteBtnDecline": "Não posso ir",
+      "previewTitle": "Pré-visualização",
+      "previewDocument": "Documento",
+      "previewBodyPlaceholder": "O corpo da sua mensagem vai aparecer aqui",
+      "previewUntitledButton": "Botão"
     },
     "roles": {
       "admin": "Admin",
