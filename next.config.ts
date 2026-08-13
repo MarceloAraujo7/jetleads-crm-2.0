@@ -110,19 +110,24 @@ const nextConfig: NextConfig = {
    *     the correct production headers for hashed assets.
    *   - /api/*          — no-store. API responses are per-user and
    *     must never be shared across requests at the edge.
-   *   - Everything else — public, brief s-maxage + generous
-   *     stale-while-revalidate. The edge serves instantly from cache
-   *     for the first 5 min, then returns cached content while
-   *     refreshing in the background for up to 24 h. A deploy's
-   *     chunk-hash drift self-heals within ~5 min with no user-
-   *     visible latency.
-   *
-   *   Note: dynamic dashboard routes (/inbox, /contacts, /pipelines,
-   *   /broadcasts, etc.) are server-rendered per request — Next.js
-   *   and Supabase auth already prevent them from being served
-   *   from a shared cache. The s-maxage here is a ceiling; Next.js
-   *   and auth middleware still set `private` / `no-store` for
-   *   per-user responses.
+   *   - The authed app shell (/dashboard, /inbox, /contacts,
+   *     /pipelines, /broadcasts, /automations, /settings, /agents,
+   *     /flows, /notifications) — no-store. These pages are 'use
+   *     client' shells with no server-side data fetching of their
+   *     own, so Next prerenders them as static HTML at build time.
+   *     That made them match the "everything else" rule below and
+   *     get cached at the Hostinger edge for up to 5 min (longer
+   *     under stale-while-revalidate) — after a deploy, users could
+   *     get the previous build's HTML/JS paired with the *new*
+   *     messages.json, e.g. raw i18n keys for sections that existed
+   *     in the old build's nav but were renamed/removed in the new
+   *     one. Excluded here so every request goes to origin.
+   *   - Everything else (marketing/auth pages) — public, brief
+   *     s-maxage + generous stale-while-revalidate. The edge serves
+   *     instantly from cache for the first 5 min, then returns
+   *     cached content while refreshing in the background for up to
+   *     24 h. A deploy's chunk-hash drift self-heals within ~5 min
+   *     with no user-visible latency.
    *
    * Security headers are appended via a separate catch-all rule
    * below — Next.js merges headers from every matching rule, so
@@ -136,7 +141,13 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
-        source: "/:path((?!_next/static|_next/image|api).*)",
+        source:
+          "/:path(dashboard|inbox|contacts|pipelines|broadcasts|automations|settings|agents|flows|notifications)((?:/.*)?)",
+        headers: [{ key: "Cache-Control", value: "no-store" }],
+      },
+      {
+        source:
+          "/:path((?!_next/static|_next/image|api|dashboard|inbox|contacts|pipelines|broadcasts|automations|settings|agents|flows|notifications).*)",
         headers: [
           {
             key: "Cache-Control",
