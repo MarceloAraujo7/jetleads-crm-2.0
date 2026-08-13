@@ -50,6 +50,8 @@
     "pipelines": "Kanban",
     "broadcasts": "Disparos",
     "automations": "Automações",
+    "whatsapp": "WhatsApp",
+    "team": "Equipe",
     "settings": "Configurações",
     "openMenu": "Abrir menu",
     "openAccountMenu": "Abrir menu da conta",
@@ -1250,16 +1252,12 @@
     "pageTitle": "Configurações",
     "pageDesc": "Tudo em um só lugar — sua conta e seu workspace. Escolha uma seção para gerenciá-la.",
     "overview": {
-      "notSetup": "Ainda não configurado",
-      "connected": "Conectado",
-      "needsReconnecting": "Precisa reconectar",
-      "viewTeamMembers": "Ver membros da equipe",
-      "membersCount": "{count} {count, plural, =1 {membro} other {membros}}",
-      "pendingInvites": "{count} {count, plural, =1 {convite} other {convites}} pendente(s)",
       "tagsAndFields": "Tags e campos personalizados",
       "tagsCount": "{count} {count, plural, =1 {tag} other {tags}}",
       "fieldsCount": "{count} {count, plural, =1 {campo} other {campos}} personalizado(s)",
       "appearance": "modo {mode} · destaque {theme}",
+      "manageSecurity": "Senha e segurança da conta",
+      "manageApiKeys": "Gerenciar chaves de API",
       "yourAccount": "Sua conta",
       "loading": "Carregando…"
     },
@@ -1565,9 +1563,7 @@
       "profile": "Seu perfil",
       "security": "Login e segurança",
       "appearance": "Aparência",
-      "whatsapp": "WhatsApp",
       "fields": "Campos e tags",
-      "members": "Membros da equipe",
       "api": "Chaves de API"
     },
     "groups": {
@@ -1746,6 +1742,9 @@
       "loading": "Carregando…"
     },
     "whatsappModule": {
+      "pageTitle": "WhatsApp",
+      "pageDesc": "Conexão com a Meta, modelos de mensagem e respostas rápidas — tudo em um só lugar.",
+      "adminOnly": "Apenas admins e proprietários podem gerenciar o módulo WhatsApp.",
       "connection": "Conexão",
       "templates": "Modelos",
       "quickReplies": "Respostas rápidas"

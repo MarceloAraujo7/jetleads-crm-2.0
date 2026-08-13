@@ -56,9 +56,7 @@ export function SettingsRail({
       )}
     >
       {RAIL_GROUPS.map(({ label, group }) => {
-        const items = SETTINGS_SECTIONS.filter(
-          (s) => SECTION_META[s].group === group && !SECTION_META[s].hiddenFromRail,
-        );
+        const items = SETTINGS_SECTIONS.filter((s) => SECTION_META[s].group === group);
         return (
           <div
             key={group}

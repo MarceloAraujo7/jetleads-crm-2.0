@@ -50,6 +50,8 @@
     "pipelines": "Kanban",
     "broadcasts": "Broadcasts",
     "automations": "Automations",
+    "whatsapp": "WhatsApp",
+    "team": "Team",
     "settings": "Settings",
     "openMenu": "Open menu",
     "openAccountMenu": "Open account menu",
@@ -1250,16 +1252,12 @@
     "pageTitle": "Settings",
     "pageDesc": "Everything in one place — your account and your workspace. Pick a section to manage it.",
     "overview": {
-      "notSetup": "Not set up yet",
-      "connected": "Connected",
-      "needsReconnecting": "Needs reconnecting",
-      "viewTeamMembers": "View team members",
-      "membersCount": "{count} {count, plural, =1 {member} other {members}}",
-      "pendingInvites": "{count} pending {count, plural, =1 {invite} other {invites}}",
       "tagsAndFields": "Tags and custom fields",
       "tagsCount": "{count} {count, plural, =1 {tag} other {tags}}",
       "fieldsCount": "{count} custom {count, plural, =1 {field} other {fields}}",
       "appearance": "{mode} mode · {theme} accent",
+      "manageSecurity": "Password and account security",
+      "manageApiKeys": "Manage API keys",
       "yourAccount": "Your account",
       "loading": "Loading…"
     },
@@ -1565,9 +1563,7 @@
       "profile": "Your profile",
       "security": "Login & security",
       "appearance": "Appearance",
-      "whatsapp": "WhatsApp",
       "fields": "Fields & tags",
-      "members": "Team members",
       "api": "API keys"
     },
     "groups": {
@@ -1746,6 +1742,9 @@
       "loading": "Loading…"
     },
     "whatsappModule": {
+      "pageTitle": "WhatsApp",
+      "pageDesc": "Meta connection, message templates, and quick replies — all in one place.",
+      "adminOnly": "Only admins and owners can manage the WhatsApp module.",
       "connection": "Connection",
       "templates": "Templates",
       "quickReplies": "Quick replies"

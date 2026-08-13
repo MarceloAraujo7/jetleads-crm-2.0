@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useMemo, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 
@@ -10,11 +10,10 @@ import { SettingsOverview } from '@/components/settings/settings-overview';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
-import { WhatsAppModule } from '@/components/settings/whatsapp-module';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
-import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import {
+  MOVED_SECTION_ROUTES,
   resolveSection,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
@@ -23,10 +22,9 @@ import {
 // sits under a Suspense boundary. Without one, the production build hits
 // the "missing Suspense with CSR bailout" error and the whole page bails
 // to client-side rendering — shipping a settings screen whose rail never
-// wires up its click handlers. You land on the section the URL carried
-// (the account-menu Settings link points at `?tab=whatsapp`) and can't
-// navigate away. Mirror the login/signup split: a thin wrapper supplies
-// the boundary; the inner component reads the query string.
+// wires up its click handlers. Mirror the login/signup split: a thin
+// wrapper supplies the boundary; the inner component reads the query
+// string.
 export default function SettingsPage() {
   return (
     <Suspense fallback={null}>
@@ -45,7 +43,16 @@ function SettingsPageInner() {
   // section — deep-linkable, and it keeps the existing links in the
   // app sidebar/header working. Legacy tab values (tags, custom-fields)
   // resolve onto their new home; unknown/empty → the Overview landing.
-  const section = resolveSection(searchParams.get('tab'));
+  const rawTab = searchParams.get('tab');
+  const section = resolveSection(rawTab);
+
+  // WhatsApp and Team used to be Settings tabs; they're now their own
+  // top-level pages. Any old link/bookmark still carrying `?tab=whatsapp`
+  // (etc.) gets bounced there instead of silently landing on Overview.
+  const movedRoute = rawTab ? MOVED_SECTION_ROUTES[rawTab] : undefined;
+  useEffect(() => {
+    if (movedRoute) router.replace(movedRoute);
+  }, [movedRoute, router]);
 
   const go = (next: SettingsSection) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -68,11 +75,12 @@ function SettingsPageInner() {
     profile: <ProfileForm />,
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
-    whatsapp: <WhatsAppModule />,
     fields: <FieldsAndTagsPanel />,
-    members: <MembersTab />,
     api: <ApiKeysSettings />,
   };
+
+  // Redirecting away — render nothing rather than flashing Overview.
+  if (movedRoute) return null;
 
   return (
     <div>

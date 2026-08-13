@@ -112,7 +112,8 @@ const nextConfig: NextConfig = {
    *     must never be shared across requests at the edge.
    *   - The authed app shell (/dashboard, /inbox, /contacts,
    *     /pipelines, /broadcasts, /automations, /settings, /agents,
-   *     /flows, /notifications) — no-store. These pages are 'use
+   *     /flows, /notifications, /whatsapp, /team) — no-store. These
+   *     pages are 'use
    *     client' shells with no server-side data fetching of their
    *     own, so Next prerenders them as static HTML at build time.
    *     That made them match the "everything else" rule below and
@@ -142,12 +143,12 @@ const nextConfig: NextConfig = {
       },
       {
         source:
-          "/:path(dashboard|inbox|contacts|pipelines|broadcasts|automations|settings|agents|flows|notifications)((?:/.*)?)",
+          "/:path(dashboard|inbox|contacts|pipelines|broadcasts|automations|settings|agents|flows|notifications|whatsapp|team)((?:/.*)?)",
         headers: [{ key: "Cache-Control", value: "no-store" }],
       },
       {
         source:
-          "/:path((?!_next/static|_next/image|api|dashboard|inbox|contacts|pipelines|broadcasts|automations|settings|agents|flows|notifications).*)",
+          "/:path((?!_next/static|_next/image|api|dashboard|inbox|contacts|pipelines|broadcasts|automations|settings|agents|flows|notifications|whatsapp|team).*)",
         headers: [
           {
             key: "Cache-Control",

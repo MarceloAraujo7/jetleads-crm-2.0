@@ -26,6 +26,8 @@ const pageTitles: Record<string, string> = {
   "/pipelines": "pipelines",
   "/broadcasts": "broadcasts",
   "/automations": "automations",
+  "/whatsapp": "whatsapp",
+  "/team": "team",
   "/settings": "settings",
 };
 
@@ -124,7 +126,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
           <DropdownMenuItem
             render={
               <Link
-                href="/settings?tab=whatsapp"
+                href="/settings"
                 className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
               />
             }
