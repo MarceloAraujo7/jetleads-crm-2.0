@@ -51,10 +51,12 @@ import {
   Filter,
   X,
   Send,
+  Shuffle,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
+import { DistributionSettingsDialog } from '@/components/contacts/distribution-settings-dialog';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
@@ -89,6 +91,7 @@ export default function ContactsPage() {
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [customFieldsOpen, setCustomFieldsOpen] = useState(false);
+  const [distributionOpen, setDistributionOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -377,6 +380,16 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {canEditSettings && (
+            <Button
+              variant="outline"
+              onClick={() => setDistributionOpen(true)}
+              className="border-border text-muted-foreground hover:bg-muted"
+            >
+              <Shuffle className="size-4" />
+              {t('distributionBtn')}
+            </Button>
+          )}
           {canEditSettings && (
             <Button
               variant="outline"
@@ -803,6 +816,14 @@ export default function ContactsPage() {
         <CustomFieldsManager
           open={customFieldsOpen}
           onOpenChange={setCustomFieldsOpen}
+        />
+      )}
+
+      {/* Lead Distribution Settings (admin+) */}
+      {canEditSettings && (
+        <DistributionSettingsDialog
+          open={distributionOpen}
+          onOpenChange={setDistributionOpen}
         />
       )}
 

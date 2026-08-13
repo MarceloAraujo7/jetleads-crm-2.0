@@ -1,6 +1,4 @@
 import {
-  Coins,
-  FileText,
   KeyRound,
   LayoutGrid,
   Palette,
@@ -9,7 +7,6 @@ import {
   Tags,
   User,
   UsersRound,
-  Zap,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -27,10 +24,7 @@ export const SETTINGS_SECTIONS = [
   'security',
   'appearance',
   'whatsapp',
-  'templates',
-  'quick-replies',
   'fields',
-  'deals',
   'members',
   'api',
 ] as const;
@@ -60,10 +54,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace', hiddenFromRail: true },
-  templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace', hiddenFromRail: true },
-  'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
-  deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace', hiddenFromRail: true },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
 };
@@ -81,11 +72,14 @@ function isSection(value: string | null): value is SettingsSection {
 /**
  * Resolve a raw `?tab=` value to a section. Legacy tabs from the old
  * flat layout collapse onto their new home (Tags + Custom fields → the
- * merged "Fields & tags" section). Anything unknown falls back to the
- * Overview landing.
+ * merged "Fields & tags" section; Templates + Quick replies → the
+ * merged "WhatsApp" module). "Deals & currency" has no replacement —
+ * it's gone, so old links there fall to Overview like any other
+ * unknown value.
  */
 export function resolveSection(raw: string | null): SettingsSection {
   if (raw === 'tags' || raw === 'custom-fields') return 'fields';
+  if (raw === 'templates' || raw === 'quick-replies') return 'whatsapp';
   if (isSection(raw)) return raw;
   return DEFAULT_SECTION;
 }

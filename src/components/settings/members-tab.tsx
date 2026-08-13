@@ -47,7 +47,6 @@ import {
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -76,7 +75,6 @@ import {
 import { InviteMemberDialog } from './invite-member-dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 import { ROLE_META } from './role-meta';
-import { createClient } from '@/lib/supabase/client';
 
 interface Member {
   user_id: string;
@@ -85,7 +83,6 @@ interface Member {
   avatar_url: string | null;
   role: AccountRole;
   joined_at: string;
-  daily_lead_quota: number | null;
 }
 
 interface Invitation {
@@ -130,19 +127,12 @@ function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, stri
 export function MembersTab() {
   const t = useTranslations('Settings.members');
   const tRoles = useTranslations('Settings.roles');
-  const { user, accountId, canManageMembers } = useAuth();
+  const { user, canManageMembers } = useAuth();
   const { getPresence, getRow, now } = usePresence();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Account-wide "distribute new leads automatically" toggle
-  // (src/lib/contacts/assign-lead.ts). Off by default for every
-  // account — this just surfaces the switch, migration 043 owns the
-  // column and its default.
-  const [distributionEnabled, setDistributionEnabled] = useState(false);
-  const [savingDistribution, setSavingDistribution] = useState(false);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<Member | null>(null);
@@ -190,35 +180,6 @@ export function MembersTab() {
     void loadEverything();
   }, [loadEverything]);
 
-  useEffect(() => {
-    if (!accountId) return;
-    const supabase = createClient();
-    supabase
-      .from('accounts')
-      .select('lead_distribution_enabled')
-      .eq('id', accountId)
-      .single()
-      .then(({ data }) => {
-        if (data) setDistributionEnabled(Boolean(data.lead_distribution_enabled));
-      });
-  }, [accountId]);
-
-  async function handleToggleDistribution(next: boolean) {
-    if (!accountId) return;
-    setSavingDistribution(true);
-    setDistributionEnabled(next);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('accounts')
-      .update({ lead_distribution_enabled: next })
-      .eq('id', accountId);
-    if (error) {
-      setDistributionEnabled(!next);
-      toast.error(t('toastDistributionFailed'));
-    }
-    setSavingDistribution(false);
-  }
-
   async function handleRoleChange(member: Member, nextRole: AccountRole) {
     if (member.role === nextRole) return;
     // Optimistic update — flip the dropdown immediately so the UI
@@ -264,40 +225,6 @@ export function MembersTab() {
       toast.error('Could not reach the server');
     } finally {
       setPendingMemberAction(null);
-    }
-  }
-
-  async function handleQuotaChange(member: Member, nextQuota: number | null) {
-    if (member.daily_lead_quota === nextQuota) return;
-    const previousQuota = member.daily_lead_quota;
-    setMembers((prev) =>
-      prev.map((m) =>
-        m.user_id === member.user_id ? { ...m, daily_lead_quota: nextQuota } : m,
-      ),
-    );
-    try {
-      const res = await fetch(`/api/account/members/${member.user_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ daily_lead_quota: nextQuota }),
-      });
-      if (!res.ok) {
-        setMembers((prev) =>
-          prev.map((m) =>
-            m.user_id === member.user_id ? { ...m, daily_lead_quota: previousQuota } : m,
-          ),
-        );
-        const payload = await res.json().catch(() => ({}));
-        toast.error(payload.error || t('toastQuotaFailed'));
-      }
-    } catch (err) {
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.user_id === member.user_id ? { ...m, daily_lead_quota: previousQuota } : m,
-        ),
-      );
-      console.error('[MembersTab] quota change error:', err);
-      toast.error('Could not reach the server');
     }
   }
 
@@ -367,22 +294,6 @@ export function MembersTab() {
           </RequireRole>
         }
       />
-
-      <RequireRole min="admin">
-        <Card>
-          <CardContent className="flex items-center justify-between gap-4 py-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">{t('distributionTitle')}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{t('distributionDesc')}</p>
-            </div>
-            <Switch
-              checked={distributionEnabled}
-              disabled={savingDistribution}
-              onCheckedChange={handleToggleDistribution}
-            />
-          </CardContent>
-        </Card>
-      </RequireRole>
 
       {/* Live presence summary across the roster. Updates without a
           full refresh as heartbeats and the local re-derive tick land. */}
@@ -499,33 +410,6 @@ export function MembersTab() {
                       inline. Items align to the start on mobile so the
                       role dropdown lines up under the avatar. */}
                   <div className="flex items-center gap-2 sm:gap-3">
-                    {/* Daily lead quota — only meaningful for sellers
-                        (distribution candidates are account_role='agent').
-                        Admin-editable only; null = no cap. */}
-                    {canManageMembers && member.role === 'agent' && (
-                      <div className="flex items-center gap-1.5">
-                        <label
-                          htmlFor={`quota-${member.user_id}`}
-                          className="text-[11px] text-muted-foreground whitespace-nowrap hidden sm:inline"
-                        >
-                          {t('dailyQuota')}
-                        </label>
-                        <input
-                          id={`quota-${member.user_id}`}
-                          type="number"
-                          min={0}
-                          inputMode="numeric"
-                          placeholder={t('noLimit')}
-                          defaultValue={member.daily_lead_quota ?? ''}
-                          onBlur={(e) => {
-                            const raw = e.target.value.trim();
-                            handleQuotaChange(member, raw === '' ? null : Math.max(0, Number(raw)));
-                          }}
-                          className="h-8 w-16 rounded-md border border-border bg-muted px-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
-                        />
-                      </div>
-                    )}
-
                     {/* Role display / editor. Inline Select is admin+
                         only AND not allowed on the owner row (owner
                         changes go through transfer, which lands later). */}

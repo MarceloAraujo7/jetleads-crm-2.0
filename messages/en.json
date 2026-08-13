@@ -19,8 +19,8 @@
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "notifications": "Notifications",
-    "contacts": "Contacts",
-    "pipelines": "Pipelines",
+    "contacts": "Leads",
+    "pipelines": "Kanban",
     "broadcasts": "Broadcasts",
     "automations": "Automations",
     "flows": "Flows",
@@ -40,15 +40,14 @@
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
     "whatsapp": "WhatsApp",
-    "templates": "Templates",
     "team": "Team"
   },
   "Header": {
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "notifications": "Notifications",
-    "contacts": "Contacts",
-    "pipelines": "Pipelines",
+    "contacts": "Leads",
+    "pipelines": "Kanban",
     "broadcasts": "Broadcasts",
     "automations": "Automations",
     "settings": "Settings",
@@ -113,7 +112,7 @@
       "title": "Pipeline Value",
       "description": "Open deals by stage",
       "noOpenDeals": "No open deals yet",
-      "noOpenDealsHint": "Create deals in Pipelines to see stage breakdowns here.",
+      "noOpenDealsHint": "Create deals in Kanban to see stage breakdowns here.",
       "dealCount": "{count} {count, plural, =1 {deal} other {deals}}",
       "total": "Total",
       "ariaLabel": "Pipeline value by stage"
@@ -282,12 +281,12 @@
   },
   "Contacts": {
     "page": {
-      "title": "Contacts",
-      "subtitle": "Manage your contact list. {count} total contacts.",
-      "subtitleZero": "Manage your contact list.",
+      "title": "Leads",
+      "subtitle": "Manage your leads. {count} total leads.",
+      "subtitleZero": "Manage your leads.",
       "customFieldsBtn": "Custom fields",
       "importBtn": "Import",
-      "addContactBtn": "Add Contact",
+      "addContactBtn": "Add Lead",
       "searchPlaceholder": "Search by name, phone, or email...",
       "filterByTags": "Filter by tags",
       "clearAll": "Clear all",
@@ -324,7 +323,8 @@
       "toastBulkFailedDelete": "Failed to delete contacts",
       "toastBulkDeleted": "{count} contacts deleted",
       "sendInvite": "Send invite",
-      "toastNoPhoneForInvite": "None of the selected contacts have a phone number."
+      "toastNoPhoneForInvite": "None of the selected contacts have a phone number.",
+      "distributionBtn": "Distribution"
     },
     "form": {
       "addTitle": "Add Contact",
@@ -481,6 +481,36 @@
       "toastRenameFailed": "Could not rename field.",
       "toastDeleteFailed": "Could not delete field.",
       "toastDeleted": "Deleted \"{name}\"."
+    },
+    "distribution": {
+      "title": "Lead distribution",
+      "desc": "Choose how new leads get assigned to sellers automatically.",
+      "strategy": {
+        "manual": {
+          "label": "Manual",
+          "desc": "Turns off automatic assignment — leads stay unassigned until someone picks them up."
+        },
+        "least_loaded": {
+          "label": "Lowest load",
+          "desc": "Whoever currently has the fewest leads gets the next one. Self-balancing."
+        },
+        "round_robin": {
+          "label": "Sequential rotation",
+          "desc": "Alternates through sellers in a fixed order, regardless of current load."
+        },
+        "equal": {
+          "label": "Evenly split",
+          "desc": "Pure count-based split across everyone — ignores daily quotas and the seller's own number."
+        }
+      },
+      "quotaTitle": "Daily quota per seller",
+      "quotaDesc": "Once a seller hits their limit for the day, new leads skip them until tomorrow. Leave blank for no limit.",
+      "noAgents": "No sellers on the team yet.",
+      "noLimit": "No limit",
+      "toastLoadFailed": "Failed to load distribution settings",
+      "toastSaved": "Distribution strategy updated",
+      "toastSaveFailed": "Failed to update distribution strategy",
+      "toastQuotaFailed": "Failed to update quota"
     }
   },
   "Pipelines": {
@@ -1226,9 +1256,6 @@
       "viewTeamMembers": "View team members",
       "membersCount": "{count} {count, plural, =1 {member} other {members}}",
       "pendingInvites": "{count} pending {count, plural, =1 {invite} other {invites}}",
-      "manageTemplates": "Manage message templates",
-      "templatesCount": "{count} {count, plural, =1 {template} other {templates}}",
-      "pendingReview": "{count} pending review",
       "tagsAndFields": "Tags and custom fields",
       "tagsCount": "{count} {count, plural, =1 {tag} other {tags}}",
       "fieldsCount": "{count} custom {count, plural, =1 {field} other {fields}}",
@@ -1265,13 +1292,7 @@
       "removeDialogDesc": "Remove <bold>{name}</bold> from the account? They'll be signed out of this account and given a fresh personal account on their next sign-in. Their login isn't deleted.",
       "cancel": "Cancel",
       "removing": "Removing...",
-      "removeBtn": "Remove member",
-      "distributionTitle": "Automatic lead distribution",
-      "distributionDesc": "New leads (WhatsApp, CSV import, API) are automatically assigned to the seller with the fewest open leads.",
-      "toastDistributionFailed": "Failed to update lead distribution setting",
-      "dailyQuota": "Daily quota",
-      "noLimit": "No limit",
-      "toastQuotaFailed": "Failed to update daily quota"
+      "removeBtn": "Remove member"
     },
     "invite": {
       "inviteCreated": "Invite created",
@@ -1545,10 +1566,7 @@
       "security": "Login & security",
       "appearance": "Appearance",
       "whatsapp": "WhatsApp",
-      "templates": "Templates",
-      "quick-replies": "Quick replies",
       "fields": "Fields & tags",
-      "deals": "Deals & currency",
       "members": "Team members",
       "api": "API keys"
     },
@@ -1605,7 +1623,9 @@
       "cancel": "Cancel",
       "signingOut": "Signing out…",
       "signOutEverywhere": "Sign out everywhere",
-      "signOutFailed": "Sign-out failed: {message}"
+      "signOutFailed": "Sign-out failed: {message}",
+      "whatsappTitle": "Your WhatsApp number",
+      "whatsappDesc": "Connect your own official WhatsApp number to send and receive messages as yourself."
     },
     "appearance": {
       "title": "Appearance",
@@ -1657,18 +1677,6 @@
       "newKeyDesc": "Name it after the integration that will use it, and grant only the scopes it needs.",
       "done": "Done",
       "networkError": "Could not reach the server"
-    },
-    "deals": {
-      "title": "Deals & currency",
-      "description": "The currency used for new deals and for pipeline and dashboard totals.",
-      "defaultCurrency": "Default currency",
-      "defaultCurrencyDesc": "New deals default to this currency, and pipeline and dashboard totals are shown in it. Existing deals keep the currency they were saved with.",
-      "currencyLabel": "Currency",
-      "adminOnlyHint": "Only account admins can change the default currency.",
-      "save": "Save",
-      "saving": "Saving...",
-      "saveFailed": "Failed to save default currency",
-      "saveSuccess": "Default currency updated"
     },
     "aiConfig": {
       "title": "Agent setup",
@@ -1736,6 +1744,11 @@
       "reindex": "Reindex",
       "reindexTooltip": "Re-embed all documents (e.g. after adding an embeddings key)",
       "loading": "Loading…"
+    },
+    "whatsappModule": {
+      "connection": "Connection",
+      "templates": "Templates",
+      "quickReplies": "Quick replies"
     }
   }
 }

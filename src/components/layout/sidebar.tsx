@@ -11,7 +11,6 @@ import {
   Bell,
   Bot,
   Crown,
-  FileText,
   GitBranch,
   LayoutDashboard,
   LogOut,
@@ -28,7 +27,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import type { AccountRole } from "@/lib/auth/roles";
+import { hasMinRole, type AccountRole } from "@/lib/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -90,13 +89,19 @@ interface NavItem {
    */
   beta?: boolean;
   /**
-   * For items that point into Settings via `?tab=` (WhatsApp, Templates,
-   * Team members — promoted here for direct access instead of being
+   * For items that point into Settings via `?tab=` (WhatsApp, Team
+   * members — promoted here for direct access instead of being
    * buried in the Settings rail): the tab value to match against the
    * current URL for active-state highlighting, since `pathname` alone
    * can't distinguish between `/settings` tabs.
    */
   matchTab?: string;
+  /**
+   * WhatsApp is admin+ only now that a seller connects their own
+   * number from their Profile instead — no reason for an agent to see
+   * the number-management module in their sidebar.
+   */
+  adminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -109,8 +114,7 @@ const navItems: NavItem[] = [
   { href: "/automations", labelKey: "automations", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
-  { href: "/settings?tab=whatsapp", labelKey: "whatsapp", icon: PlugZap, matchTab: "whatsapp" },
-  { href: "/settings?tab=templates", labelKey: "templates", icon: FileText, matchTab: "templates" },
+  { href: "/settings?tab=whatsapp", labelKey: "whatsapp", icon: PlugZap, matchTab: "whatsapp", adminOnly: true },
   { href: "/settings?tab=members", labelKey: "team", icon: UsersRound, matchTab: "members" },
 ];
 
@@ -121,7 +125,7 @@ const bottomNavItems = [
 // Tabs promoted to their own top-level sidebar link — the bottom
 // "Settings" link should stop claiming "active" for these, since each
 // now highlights independently.
-const PROMOTED_SETTINGS_TABS = new Set(["whatsapp", "templates", "members"]);
+const PROMOTED_SETTINGS_TABS = new Set(["whatsapp", "members"]);
 
 /**
  * Reads the current `?tab=` value and reports it up. Isolated in its
@@ -256,7 +260,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {navItems
+              .filter((item) => !item.adminOnly || hasMinRole(accountRole ?? "viewer", "admin"))
+              .map((item) => {
               const isActive = item.matchTab
                 ? pathname === "/settings" && settingsTab === item.matchTab
                 : pathname === item.href ||

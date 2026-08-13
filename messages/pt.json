@@ -19,8 +19,8 @@
     "dashboard": "Painel",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
-    "contacts": "Contatos",
-    "pipelines": "Funis",
+    "contacts": "Leads",
+    "pipelines": "Kanban",
     "broadcasts": "Disparos",
     "automations": "Automações",
     "flows": "Fluxos",
@@ -40,15 +40,14 @@
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
     "whatsapp": "WhatsApp",
-    "templates": "Modelos",
     "team": "Equipe"
   },
   "Header": {
     "dashboard": "Painel",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
-    "contacts": "Contatos",
-    "pipelines": "Funis",
+    "contacts": "Leads",
+    "pipelines": "Kanban",
     "broadcasts": "Disparos",
     "automations": "Automações",
     "settings": "Configurações",
@@ -113,7 +112,7 @@
       "title": "Valor do funil",
       "description": "Negócios abertos por etapa",
       "noOpenDeals": "Nenhum negócio aberto ainda",
-      "noOpenDealsHint": "Crie negócios em Funis para ver a divisão por etapa aqui.",
+      "noOpenDealsHint": "Crie negócios no Kanban para ver o detalhamento por etapa aqui.",
       "dealCount": "{count} {count, plural, =1 {negócio} other {negócios}}",
       "total": "Total",
       "ariaLabel": "Valor do funil por etapa"
@@ -282,12 +281,12 @@
   },
   "Contacts": {
     "page": {
-      "title": "Contatos",
-      "subtitle": "Gerencie sua lista de contatos. {count} contatos no total.",
-      "subtitleZero": "Gerencie sua lista de contatos.",
+      "title": "Leads",
+      "subtitle": "Gerencie seus leads. {count} leads no total.",
+      "subtitleZero": "Gerencie seus leads.",
       "customFieldsBtn": "Campos personalizados",
       "importBtn": "Importar",
-      "addContactBtn": "Adicionar contato",
+      "addContactBtn": "Adicionar Lead",
       "searchPlaceholder": "Buscar por nome, telefone ou e-mail...",
       "filterByTags": "Filtrar por tags",
       "clearAll": "Limpar tudo",
@@ -324,7 +323,8 @@
       "toastBulkFailedDelete": "Falha ao excluir contatos",
       "toastBulkDeleted": "{count} contatos excluídos",
       "sendInvite": "Enviar convite",
-      "toastNoPhoneForInvite": "Nenhum dos contatos selecionados tem telefone cadastrado."
+      "toastNoPhoneForInvite": "Nenhum dos contatos selecionados tem telefone cadastrado.",
+      "distributionBtn": "Distribuição"
     },
     "form": {
       "addTitle": "Adicionar contato",
@@ -481,6 +481,36 @@
       "toastRenameFailed": "Não foi possível renomear o campo.",
       "toastDeleteFailed": "Não foi possível excluir o campo.",
       "toastDeleted": "\"{name}\" excluído."
+    },
+    "distribution": {
+      "title": "Distribuição de leads",
+      "desc": "Escolha como novos leads são atribuídos automaticamente aos vendedores.",
+      "strategy": {
+        "manual": {
+          "label": "Manual",
+          "desc": "Desliga a atribuição automática — leads ficam sem dono até alguém pegar."
+        },
+        "least_loaded": {
+          "label": "Menor carga",
+          "desc": "Quem tem menos leads no momento recebe o próximo. Autoequilibrado."
+        },
+        "round_robin": {
+          "label": "Rodízio sequencial",
+          "desc": "Alterna entre os vendedores em ordem fixa, independente da carga atual."
+        },
+        "equal": {
+          "label": "Por igual entre todos",
+          "desc": "Divide só pela contagem total, ignorando quota diária e o número próprio do vendedor."
+        }
+      },
+      "quotaTitle": "Meta diária por vendedor",
+      "quotaDesc": "Quando o vendedor bate o limite do dia, novos leads pulam ele até amanhã. Deixe em branco pra não ter limite.",
+      "noAgents": "Nenhum vendedor na equipe ainda.",
+      "noLimit": "Sem limite",
+      "toastLoadFailed": "Falha ao carregar configurações de distribuição",
+      "toastSaved": "Estratégia de distribuição atualizada",
+      "toastSaveFailed": "Falha ao atualizar a estratégia de distribuição",
+      "toastQuotaFailed": "Falha ao atualizar a meta"
     }
   },
   "Pipelines": {
@@ -1226,9 +1256,6 @@
       "viewTeamMembers": "Ver membros da equipe",
       "membersCount": "{count} {count, plural, =1 {membro} other {membros}}",
       "pendingInvites": "{count} {count, plural, =1 {convite} other {convites}} pendente(s)",
-      "manageTemplates": "Gerenciar modelos de mensagem",
-      "templatesCount": "{count} {count, plural, =1 {modelo} other {modelos}}",
-      "pendingReview": "{count} aguardando revisão",
       "tagsAndFields": "Tags e campos personalizados",
       "tagsCount": "{count} {count, plural, =1 {tag} other {tags}}",
       "fieldsCount": "{count} {count, plural, =1 {campo} other {campos}} personalizado(s)",
@@ -1265,13 +1292,7 @@
       "removeDialogDesc": "Remover <bold>{name}</bold> da conta? A pessoa será desconectada desta conta e receberá uma nova conta pessoal no próximo login. O login dela não é excluído.",
       "cancel": "Cancelar",
       "removing": "Removendo...",
-      "removeBtn": "Remover membro",
-      "distributionTitle": "Distribuição automática de leads",
-      "distributionDesc": "Novos leads (WhatsApp, importação CSV, API) são atribuídos automaticamente ao vendedor com menos leads em aberto.",
-      "toastDistributionFailed": "Falha ao atualizar a configuração de distribuição de leads",
-      "dailyQuota": "Meta diária",
-      "noLimit": "Sem limite",
-      "toastQuotaFailed": "Falha ao atualizar a meta diária"
+      "removeBtn": "Remover membro"
     },
     "invite": {
       "inviteCreated": "Convite criado",
@@ -1545,10 +1566,7 @@
       "security": "Login e segurança",
       "appearance": "Aparência",
       "whatsapp": "WhatsApp",
-      "templates": "Modelos",
-      "quick-replies": "Respostas rápidas",
       "fields": "Campos e tags",
-      "deals": "Negócios e moeda",
       "members": "Membros da equipe",
       "api": "Chaves de API"
     },
@@ -1605,7 +1623,9 @@
       "cancel": "Cancelar",
       "signingOut": "Saindo…",
       "signOutEverywhere": "Sair de todos os lugares",
-      "signOutFailed": "Falha ao sair: {message}"
+      "signOutFailed": "Falha ao sair: {message}",
+      "whatsappTitle": "Seu número de WhatsApp",
+      "whatsappDesc": "Conecte seu próprio número oficial de WhatsApp pra enviar e receber mensagens como você mesmo."
     },
     "appearance": {
       "title": "Aparência",
@@ -1657,18 +1677,6 @@
       "newKeyDesc": "Nomeie-a de acordo com a integração que vai usá-la e conceda apenas os escopos necessários.",
       "done": "Concluído",
       "networkError": "Não foi possível conectar ao servidor"
-    },
-    "deals": {
-      "title": "Negócios e moeda",
-      "description": "A moeda usada para novos negócios e para os totais do funil e do painel.",
-      "defaultCurrency": "Moeda padrão",
-      "defaultCurrencyDesc": "Novos negócios usam esta moeda por padrão, e os totais do funil e do painel são exibidos nela. Negócios existentes mantêm a moeda com que foram salvos.",
-      "currencyLabel": "Moeda",
-      "adminOnlyHint": "Apenas admins da conta podem alterar a moeda padrão.",
-      "save": "Salvar",
-      "saving": "Salvando...",
-      "saveFailed": "Falha ao salvar a moeda padrão",
-      "saveSuccess": "Moeda padrão atualizada"
     },
     "aiConfig": {
       "title": "Configuração do agente",
@@ -1736,6 +1744,11 @@
       "reindex": "Reindexar",
       "reindexTooltip": "Reprocessar embeddings de todos os documentos (ex.: após adicionar uma chave de embeddings)",
       "loading": "Carregando…"
+    },
+    "whatsappModule": {
+      "connection": "Conexão",
+      "templates": "Modelos",
+      "quickReplies": "Respostas rápidas"
     }
   }
 }

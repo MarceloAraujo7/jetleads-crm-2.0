@@ -17,6 +17,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { useTranslations } from 'next-intl';
 import { SettingsPanelHead } from './settings-panel-head';
+import { ProfileWhatsAppSection } from './profile-whatsapp-section';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
@@ -352,6 +353,14 @@ export function ProfileForm() {
           </Button>
         </div>
       </form>
+
+      {/* Outside the form above — WhatsAppChannelForm renders its own
+          buttons without an explicit type, which default to
+          type="submit" and would otherwise trigger this profile
+          form's onSubmit if nested inside it. */}
+      <div className="mt-4">
+        <ProfileWhatsAppSection />
+      </div>
     </section>
   );
 }
