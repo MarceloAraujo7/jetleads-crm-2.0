@@ -263,6 +263,7 @@ export function ImportModal({
       }
 
       const tagAssignments: ContactTagAssignment[] = [];
+      const insertedIds: string[] = [];
 
       // 4) Batch insert the genuinely-new rows in chunks of 50. The DB
       //    unique index is the backstop: a 23505 (race, or a format
@@ -278,6 +279,7 @@ export function ImportModal({
           name: row.name || null,
           email: row.email || null,
           company: row.company || null,
+          source: 'csv_import' as const,
         }));
 
         const { data, error } = await supabase
@@ -299,6 +301,7 @@ export function ImportModal({
 
             if (!singleErr && singleData) {
               imported++;
+              insertedIds.push(singleData.id);
               if (source.tagNames.length > 0) {
                 tagAssignments.push({
                   contactId: singleData.id,
@@ -319,6 +322,7 @@ export function ImportModal({
           // parallel inserts, zip by phone or returned id instead.
           for (let j = 0; j < inserted.length; j++) {
             const source = chunk[j];
+            insertedIds.push(inserted[j].id);
             if (!source || source.tagNames.length === 0) continue;
             tagAssignments.push({
               contactId: inserted[j].id,
@@ -339,6 +343,20 @@ export function ImportModal({
         );
       } catch {
         toast.warning(t('toastTagsWarning'));
+      }
+
+      // 6) Best-effort lead distribution — runs server-side (service
+      // role) rather than with this client's session, since the
+      // load-balancing count needs the account's full contact pool,
+      // which this session's RLS view may no longer have once agent
+      // channel scoping is active (migration 043). No-ops instantly
+      // if the account hasn't turned distribution on.
+      if (insertedIds.length > 0) {
+        fetch('/api/contacts/distribute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contact_ids: insertedIds }),
+        }).catch((err) => console.error('Lead distribution request failed:', err));
       }
 
       setResult({ imported, skipped, failed, tagsAssigned });

@@ -6,6 +6,7 @@ import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
+import { maybeDistributeNewLead } from '@/lib/contacts/assign-lead'
 
 // Mirrors src/app/api/whatsapp/webhook/route.ts's fan-out budget.
 export const maxDuration = 60
@@ -167,6 +168,9 @@ async function processEvolutionEvent(body: EvolutionWebhookBody, channel: any) {
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
+  if (contactOutcome.wasCreated) {
+    void maybeDistributeNewLead(supabaseAdmin(), accountId, contactRecord.id)
+  }
 
   const convResult = await findOrCreateConversation(accountId, configOwnerUserId, contactRecord.id)
   if (!convResult) return

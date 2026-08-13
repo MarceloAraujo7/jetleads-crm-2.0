@@ -1261,7 +1261,10 @@
       "removeDialogDesc": "Remover <bold>{name}</bold> da conta? A pessoa será desconectada desta conta e receberá uma nova conta pessoal no próximo login. O login dela não é excluído.",
       "cancel": "Cancelar",
       "removing": "Removendo...",
-      "removeBtn": "Remover membro"
+      "removeBtn": "Remover membro",
+      "distributionTitle": "Distribuição automática de leads",
+      "distributionDesc": "Novos leads (WhatsApp, importação CSV, API) são atribuídos automaticamente ao vendedor com menos leads em aberto.",
+      "toastDistributionFailed": "Falha ao atualizar a configuração de distribuição de leads"
     },
     "invite": {
       "inviteCreated": "Convite criado",

@@ -47,6 +47,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -75,6 +76,7 @@ import {
 import { InviteMemberDialog } from './invite-member-dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 import { ROLE_META } from './role-meta';
+import { createClient } from '@/lib/supabase/client';
 
 interface Member {
   user_id: string;
@@ -127,12 +129,19 @@ function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, stri
 export function MembersTab() {
   const t = useTranslations('Settings.members');
   const tRoles = useTranslations('Settings.roles');
-  const { user, canManageMembers } = useAuth();
+  const { user, accountId, canManageMembers } = useAuth();
   const { getPresence, getRow, now } = usePresence();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Account-wide "distribute new leads automatically" toggle
+  // (src/lib/contacts/assign-lead.ts). Off by default for every
+  // account — this just surfaces the switch, migration 043 owns the
+  // column and its default.
+  const [distributionEnabled, setDistributionEnabled] = useState(false);
+  const [savingDistribution, setSavingDistribution] = useState(false);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<Member | null>(null);
@@ -179,6 +188,35 @@ export function MembersTab() {
   useEffect(() => {
     void loadEverything();
   }, [loadEverything]);
+
+  useEffect(() => {
+    if (!accountId) return;
+    const supabase = createClient();
+    supabase
+      .from('accounts')
+      .select('lead_distribution_enabled')
+      .eq('id', accountId)
+      .single()
+      .then(({ data }) => {
+        if (data) setDistributionEnabled(Boolean(data.lead_distribution_enabled));
+      });
+  }, [accountId]);
+
+  async function handleToggleDistribution(next: boolean) {
+    if (!accountId) return;
+    setSavingDistribution(true);
+    setDistributionEnabled(next);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('accounts')
+      .update({ lead_distribution_enabled: next })
+      .eq('id', accountId);
+    if (error) {
+      setDistributionEnabled(!next);
+      toast.error(t('toastDistributionFailed'));
+    }
+    setSavingDistribution(false);
+  }
 
   async function handleRoleChange(member: Member, nextRole: AccountRole) {
     if (member.role === nextRole) return;
@@ -294,6 +332,22 @@ export function MembersTab() {
           </RequireRole>
         }
       />
+
+      <RequireRole min="admin">
+        <Card>
+          <CardContent className="flex items-center justify-between gap-4 py-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">{t('distributionTitle')}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{t('distributionDesc')}</p>
+            </div>
+            <Switch
+              checked={distributionEnabled}
+              disabled={savingDistribution}
+              onCheckedChange={handleToggleDistribution}
+            />
+          </CardContent>
+        </Card>
+      </RequireRole>
 
       {/* Live presence summary across the roster. Updates without a
           full refresh as heartbeats and the local re-derive tick land. */}

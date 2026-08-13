@@ -15,6 +15,7 @@ import {
 } from '@/lib/whatsapp/template-webhook'
 import { tryRelayFromAgent, isKnownAgentPhone } from '@/lib/whatsapp/relay-engine'
 import { forwardCustomerReplyToAgent } from '@/lib/whatsapp/relay-notify'
+import { maybeDistributeNewLead } from '@/lib/contacts/assign-lead'
 
 // The `after()` callback in POST runs within this route's max duration.
 // Inbound processing can fan out to per-media Meta verification calls, so
@@ -633,6 +634,9 @@ async function processMessage(
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
+  if (contactOutcome.wasCreated) {
+    void maybeDistributeNewLead(supabaseAdmin(), accountId, contactRecord.id, { channelId })
+  }
 
   // Find or create conversation
   const convResult = await findOrCreateConversation(

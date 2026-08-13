@@ -1261,7 +1261,10 @@
       "removeDialogDesc": "Remove <bold>{name}</bold> from the account? They'll be signed out of this account and given a fresh personal account on their next sign-in. Their login isn't deleted.",
       "cancel": "Cancel",
       "removing": "Removing...",
-      "removeBtn": "Remove member"
+      "removeBtn": "Remove member",
+      "distributionTitle": "Automatic lead distribution",
+      "distributionDesc": "New leads (WhatsApp, CSV import, API) are automatically assigned to the seller with the fewest open leads.",
+      "toastDistributionFailed": "Failed to update lead distribution setting"
     },
     "invite": {
       "inviteCreated": "Invite created",

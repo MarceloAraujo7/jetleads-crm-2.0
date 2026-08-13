@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 import { addContactTagAndDispatch } from '@/lib/contacts/tag-events';
+import { maybeDistributeNewLead } from '@/lib/contacts/assign-lead';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
 
 /** Row select that embeds the contact's tags for serialization. */
@@ -134,6 +135,7 @@ export async function findOrCreateContact(
       name: input.name ?? sanitized,
       email: input.email ?? null,
       company: input.company ?? null,
+      source: 'api',
     })
     .select('id')
     .single();
@@ -149,6 +151,7 @@ export async function findOrCreateContact(
     throw new ContactError('Failed to create contact', 500);
   }
 
+  void maybeDistributeNewLead(db, accountId, created.id);
   return { id: created.id, created: true };
 }
 
