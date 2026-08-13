@@ -47,8 +47,15 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { uploadAccountMedia, MEDIA_MAX_BYTES } from "@/lib/storage/upload-media";
+import { fetchAccountMembers, memberLabel } from "@/lib/account/members";
+import type { AccountMember } from "@/types";
 import { slugify, type BuilderNode } from "../shared";
 import { NextNodeRow, NodeKeySelect, TextRow } from "./fields";
+
+// Sentinel for "no agent picked" in the handoff Select — an empty
+// SelectItem value isn't allowed, and `assign_to` being undefined is
+// exactly "leave it in the shared queue" per HandoffNodeConfig/engine.ts.
+const HANDOFF_QUEUE = "__queue__";
 
 interface NodeConfigFormProps {
   node: BuilderNode;
@@ -65,6 +72,13 @@ export function NodeConfigForm({
 }: NodeConfigFormProps) {
   const t = useTranslations("Flows.builder.form");
   const cfg = node.config;
+  const [members, setMembers] = useState<AccountMember[]>([]);
+  useEffect(() => {
+    // Only the handoff node needs this, but the fetch is cheap and
+    // cached for the form's lifetime — simpler than threading a
+    // "should I fetch" flag through every re-render.
+    fetchAccountMembers().then(setMembers);
+  }, []);
   switch (node.node_type) {
     case "start":
       return (
@@ -195,15 +209,45 @@ export function NodeConfigForm({
         />
       );
 
-    case "handoff":
+    case "handoff": {
+      const handoffCfg = cfg as { note?: string; assign_to?: string };
       return (
-        <TextRow
-          label={t("internalNote")}
-          value={(cfg as { note?: string }).note ?? ""}
-          onChange={(v) => onUpdateConfig({ note: v })}
-          rows={2}
-        />
+        <>
+          <div>
+            <label className="mb-1 block text-xs text-muted-foreground">
+              {t("handoffAssignTo")}
+            </label>
+            <Select
+              value={handoffCfg.assign_to || HANDOFF_QUEUE}
+              onValueChange={(v) =>
+                onUpdateConfig({ assign_to: !v || v === HANDOFF_QUEUE ? undefined : v })
+              }
+            >
+              <SelectTrigger className="bg-muted">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={HANDOFF_QUEUE}>{t("handoffQueue")}</SelectItem>
+                {members.map((m) => (
+                  <SelectItem key={m.user_id} value={m.user_id}>
+                    {memberLabel(m)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              {t("handoffAssignToHelp")}
+            </p>
+          </div>
+          <TextRow
+            label={t("internalNote")}
+            value={handoffCfg.note ?? ""}
+            onChange={(v) => onUpdateConfig({ note: v })}
+            rows={2}
+          />
+        </>
       );
+    }
 
     case "end":
       return (

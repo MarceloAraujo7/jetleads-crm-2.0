@@ -1132,7 +1132,10 @@
         "filenamePlaceholder": "invoice.pdf",
         "advanceAfterSending": "After sending, advance to",
         "pickNextNode": "Pick a next node…",
-        "none": "— None —"
+        "none": "— None —",
+        "handoffAssignTo": "Assign to",
+        "handoffAssignToHelp": "Who picks up the conversation when this node runs. Leave as shared queue to leave it unassigned for anyone to grab.",
+        "handoffQueue": "Shared queue (unassigned)"
       },
       "categories": {
         "messaging": "Messaging",

@@ -1132,7 +1132,10 @@
         "filenamePlaceholder": "fatura.pdf",
         "advanceAfterSending": "Após enviar, avançar para",
         "pickNextNode": "Escolha um próximo nó…",
-        "none": "— Nenhum —"
+        "none": "— Nenhum —",
+        "handoffAssignTo": "Atribuir para",
+        "handoffAssignToHelp": "Quem assume a conversa quando esse node roda. Deixe em fila compartilhada pra ficar sem atribuição, disponível pra qualquer um pegar.",
+        "handoffQueue": "Fila compartilhada (sem atribuição)"
       },
       "categories": {
         "messaging": "Mensagens",
