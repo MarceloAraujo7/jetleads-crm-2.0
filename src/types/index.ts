@@ -75,6 +75,8 @@ export interface AccountMember {
   avatar_url: string | null;
   role: AccountRole;
   joined_at: string;
+  /** Max leads auto-assigned to this member per day. Null = no cap. */
+  daily_lead_quota: number | null;
 }
 
 /**

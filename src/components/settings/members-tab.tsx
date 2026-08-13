@@ -85,6 +85,7 @@ interface Member {
   avatar_url: string | null;
   role: AccountRole;
   joined_at: string;
+  daily_lead_quota: number | null;
 }
 
 interface Invitation {
@@ -263,6 +264,40 @@ export function MembersTab() {
       toast.error('Could not reach the server');
     } finally {
       setPendingMemberAction(null);
+    }
+  }
+
+  async function handleQuotaChange(member: Member, nextQuota: number | null) {
+    if (member.daily_lead_quota === nextQuota) return;
+    const previousQuota = member.daily_lead_quota;
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === member.user_id ? { ...m, daily_lead_quota: nextQuota } : m,
+      ),
+    );
+    try {
+      const res = await fetch(`/api/account/members/${member.user_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ daily_lead_quota: nextQuota }),
+      });
+      if (!res.ok) {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.user_id === member.user_id ? { ...m, daily_lead_quota: previousQuota } : m,
+          ),
+        );
+        const payload = await res.json().catch(() => ({}));
+        toast.error(payload.error || t('toastQuotaFailed'));
+      }
+    } catch (err) {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === member.user_id ? { ...m, daily_lead_quota: previousQuota } : m,
+        ),
+      );
+      console.error('[MembersTab] quota change error:', err);
+      toast.error('Could not reach the server');
     }
   }
 
@@ -464,6 +499,33 @@ export function MembersTab() {
                       inline. Items align to the start on mobile so the
                       role dropdown lines up under the avatar. */}
                   <div className="flex items-center gap-2 sm:gap-3">
+                    {/* Daily lead quota — only meaningful for sellers
+                        (distribution candidates are account_role='agent').
+                        Admin-editable only; null = no cap. */}
+                    {canManageMembers && member.role === 'agent' && (
+                      <div className="flex items-center gap-1.5">
+                        <label
+                          htmlFor={`quota-${member.user_id}`}
+                          className="text-[11px] text-muted-foreground whitespace-nowrap hidden sm:inline"
+                        >
+                          {t('dailyQuota')}
+                        </label>
+                        <input
+                          id={`quota-${member.user_id}`}
+                          type="number"
+                          min={0}
+                          inputMode="numeric"
+                          placeholder={t('noLimit')}
+                          defaultValue={member.daily_lead_quota ?? ''}
+                          onBlur={(e) => {
+                            const raw = e.target.value.trim();
+                            handleQuotaChange(member, raw === '' ? null : Math.max(0, Number(raw)));
+                          }}
+                          className="h-8 w-16 rounded-md border border-border bg-muted px-2 text-xs text-foreground placeholder:text-muted-foreground outline-none focus:border-primary"
+                        />
+                      </div>
+                    )}
+
                     {/* Role display / editor. Inline Select is admin+
                         only AND not allowed on the owner row (owner
                         changes go through transfer, which lands later). */}

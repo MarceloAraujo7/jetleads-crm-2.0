@@ -461,7 +461,8 @@
       "toastSkipped_plural": "{count} duplicates skipped",
       "toastFailed": "{count} contact failed to import",
       "toastFailed_plural": "{count} contacts failed to import",
-      "toastError": "Import failed"
+      "toastError": "Import failed",
+      "downloadTemplate": "Download CSV template"
     },
     "customFields": {
       "title": "Custom fields",
@@ -1264,7 +1265,10 @@
       "removeBtn": "Remove member",
       "distributionTitle": "Automatic lead distribution",
       "distributionDesc": "New leads (WhatsApp, CSV import, API) are automatically assigned to the seller with the fewest open leads.",
-      "toastDistributionFailed": "Failed to update lead distribution setting"
+      "toastDistributionFailed": "Failed to update lead distribution setting",
+      "dailyQuota": "Daily quota",
+      "noLimit": "No limit",
+      "toastQuotaFailed": "Failed to update daily quota"
     },
     "invite": {
       "inviteCreated": "Invite created",

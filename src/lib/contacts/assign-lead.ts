@@ -39,7 +39,7 @@ export async function pickAgentForNewLead(
 
   const { data: agents } = await db
     .from('profiles')
-    .select('user_id')
+    .select('user_id, daily_lead_quota')
     .eq('account_id', accountId)
     .eq('account_role', 'agent')
   if (!agents || agents.length === 0) return null
@@ -57,9 +57,34 @@ export async function pickAgentForNewLead(
     if (loadByAgent.has(id)) loadByAgent.set(id, (loadByAgent.get(id) ?? 0) + 1)
   }
 
+  // Quota check — only bothers with a query when at least one
+  // candidate actually has a cap set (the common case has none).
+  let todayCountByAgent: Map<string, number> | null = null
+  if (agents.some((a) => a.daily_lead_quota != null)) {
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const { data: todayRows } = await db
+      .from('contacts')
+      .select('assigned_agent_id')
+      .eq('account_id', accountId)
+      .not('assigned_agent_id', 'is', null)
+      .gte('created_at', todayStart.toISOString())
+    todayCountByAgent = new Map<string, number>()
+    for (const row of todayRows ?? []) {
+      const id = row.assigned_agent_id as string
+      todayCountByAgent.set(id, (todayCountByAgent.get(id) ?? 0) + 1)
+    }
+  }
+
+  const quotaByAgent = new Map<string, number | null>(
+    agents.map((a) => [a.user_id as string, a.daily_lead_quota as number | null]),
+  )
+
   let picked: string | null = null
   let minLoad = Infinity
   for (const [agentId, load] of loadByAgent) {
+    const quota = quotaByAgent.get(agentId) ?? null
+    if (quota != null && (todayCountByAgent?.get(agentId) ?? 0) >= quota) continue
     if (load < minLoad) {
       minLoad = load
       picked = agentId

@@ -461,7 +461,8 @@
       "toastSkipped_plural": "{count} duplicatas ignoradas",
       "toastFailed": "{count} contato falhou ao importar",
       "toastFailed_plural": "{count} contatos falharam ao importar",
-      "toastError": "Falha na importação"
+      "toastError": "Falha na importação",
+      "downloadTemplate": "Baixar planilha-modelo"
     },
     "customFields": {
       "title": "Campos personalizados",
@@ -1264,7 +1265,10 @@
       "removeBtn": "Remover membro",
       "distributionTitle": "Distribuição automática de leads",
       "distributionDesc": "Novos leads (WhatsApp, importação CSV, API) são atribuídos automaticamente ao vendedor com menos leads em aberto.",
-      "toastDistributionFailed": "Falha ao atualizar a configuração de distribuição de leads"
+      "toastDistributionFailed": "Falha ao atualizar a configuração de distribuição de leads",
+      "dailyQuota": "Meta diária",
+      "noLimit": "Sem limite",
+      "toastQuotaFailed": "Falha ao atualizar a meta diária"
     },
     "invite": {
       "inviteCreated": "Convite criado",

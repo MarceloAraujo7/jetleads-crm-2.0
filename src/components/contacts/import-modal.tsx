@@ -36,11 +36,25 @@ import {
   XCircle,
   AlertTriangle,
   Tag,
+  Download,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 const DEFAULT_TAG_COLOR = '#3b82f6';
 const PREVIEW_LIMIT = 5;
+
+const CSV_TEMPLATE_CONTENT =
+  'phone,name,email,company,tags\n+5511999999999,João Silva,joao@example.com,Empresa X,vip;feirao\n';
+
+function downloadCsvTemplate() {
+  const blob = new Blob([CSV_TEMPLATE_CONTENT], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'modelo-importacao-contatos.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function truncateFilename(name: string, max = 48): string {
   if (name.length <= max) return name;
@@ -428,6 +442,15 @@ export function ImportModal({
               }}
             />
           </DialogHeader>
+
+          <button
+            type="button"
+            onClick={downloadCsvTemplate}
+            className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+          >
+            <Download className="size-3.5" />
+            {t('downloadTemplate')}
+          </button>
 
           <div
             role="button"
