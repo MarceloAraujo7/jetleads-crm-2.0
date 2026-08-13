@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account'
+import { hasMinRole } from '@/lib/auth/roles'
 import { saveMetaChannel } from '@/lib/whatsapp/channel-save'
 
 const UUID_RE =
@@ -22,14 +23,18 @@ function supabaseAdmin() {
  * PATCH /api/whatsapp/channels/[id]
  *
  * Three shapes, told apart by body contents:
- *   - `{ set_default: true }` — flips is_default on this row and
- *     clears it on every other meta_cloud channel for the account
- *     (the partial unique index only allows one at a time, so
- *     siblings must be cleared first).
+ *   - `{ set_default: true }` — admin+ only. Flips is_default on this
+ *     row and clears it on every other meta_cloud channel for the
+ *     account (the partial unique index only allows one at a time,
+ *     so siblings must be cleared first). Uses the service-role
+ *     client because `is_default` is deliberately excluded from the
+ *     column grant every session client has (migration 042) — no one
+ *     can flip it via a direct table UPDATE, admins included.
  *   - Metadata-only (`access_token` absent) — just label/ddd, no
- *     Meta round-trip.
+ *     Meta round-trip. admin+ on any channel; agent only on their own.
  *   - Credential update (`access_token` present) — re-verifies with
- *     Meta (same flow as adding a number) and re-encrypts.
+ *     Meta (same flow as adding a number) and re-encrypts. Same
+ *     admin-any / agent-own-only split.
  */
 export async function PATCH(
   request: Request,
@@ -41,11 +46,19 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid channel id.' }, { status: 400 })
     }
 
-    const { supabase, accountId, userId } = await requireRole('admin')
+    const { supabase, accountId, userId, role } = await getCurrentAccount()
+    if (!hasMinRole(role, 'agent')) {
+      return NextResponse.json({ error: "This action requires the 'agent' role or higher" }, { status: 403 })
+    }
+    const isAdmin = hasMinRole(role, 'admin')
     const body = await request.json()
 
     if (body.set_default) {
-      const { data: existing } = await supabase
+      if (!isAdmin) {
+        return NextResponse.json({ error: "This action requires the 'admin' role or higher" }, { status: 403 })
+      }
+      const admin = supabaseAdmin()
+      const { data: existing } = await admin
         .from('whatsapp_channels')
         .select('id')
         .eq('id', id)
@@ -56,7 +69,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'Channel not found.' }, { status: 404 })
       }
 
-      const { error: clearError } = await supabase
+      const { error: clearError } = await admin
         .from('whatsapp_channels')
         .update({ is_default: false })
         .eq('account_id', accountId)
@@ -67,7 +80,7 @@ export async function PATCH(
         return NextResponse.json({ error: 'Failed to update default channel' }, { status: 500 })
       }
 
-      const { error: setError } = await supabase
+      const { error: setError } = await admin
         .from('whatsapp_channels')
         .update({ is_default: true })
         .eq('id', id)
@@ -77,6 +90,22 @@ export async function PATCH(
       }
 
       return NextResponse.json({ success: true })
+    }
+
+    // Non-admin editing a channel: only their own. RLS enforces this
+    // independently (migration 042); this check exists to return a
+    // clean 403/404 instead of a silent "0 rows updated".
+    if (!isAdmin) {
+      const { data: owned } = await supabase
+        .from('whatsapp_channels')
+        .select('id')
+        .eq('id', id)
+        .eq('account_id', accountId)
+        .eq('assigned_agent_id', userId)
+        .maybeSingle()
+      if (!owned) {
+        return NextResponse.json({ error: 'Channel not found.' }, { status: 404 })
+      }
     }
 
     // Metadata-only update (label/ddd), no credential change.
@@ -144,10 +173,14 @@ export async function PATCH(
 /**
  * DELETE /api/whatsapp/channels/[id]
  *
- * Removes one channel. If it was the account's default and other
- * channels remain, promotes the oldest survivor to default so
- * resolveChannel() always has a fallback target — otherwise every
- * send silently loses its number until someone notices.
+ * Removes one channel. admin+ can delete any; agent only their own
+ * (RLS, migration 042, also enforces this independently). If it was
+ * the account's default and other channels remain, promotes the
+ * oldest survivor to default so resolveChannel() always has a
+ * fallback target — otherwise every send silently loses its number
+ * until someone notices. A non-admin's own channel is never the
+ * default (enforced at creation), so that branch only ever fires for
+ * an admin's delete.
  */
 export async function DELETE(
   _request: Request,
@@ -159,16 +192,23 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid channel id.' }, { status: 400 })
     }
 
-    const { supabase, accountId } = await requireRole('admin')
+    const { supabase, accountId, userId, role } = await getCurrentAccount()
+    if (!hasMinRole(role, 'agent')) {
+      return NextResponse.json({ error: "This action requires the 'agent' role or higher" }, { status: 403 })
+    }
+    const isAdmin = hasMinRole(role, 'admin')
 
     const { data: existing, error: lookupErr } = await supabase
       .from('whatsapp_channels')
-      .select('id, is_default')
+      .select('id, is_default, assigned_agent_id')
       .eq('id', id)
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
       .maybeSingle()
     if (lookupErr || !existing) {
+      return NextResponse.json({ error: 'Channel not found.' }, { status: 404 })
+    }
+    if (!isAdmin && existing.assigned_agent_id !== userId) {
       return NextResponse.json({ error: 'Channel not found.' }, { status: 404 })
     }
 
@@ -182,7 +222,8 @@ export async function DELETE(
     }
 
     if (existing.is_default) {
-      const { data: survivor } = await supabase
+      const admin = supabaseAdmin()
+      const { data: survivor } = await admin
         .from('whatsapp_channels')
         .select('id')
         .eq('account_id', accountId)
@@ -191,7 +232,7 @@ export async function DELETE(
         .limit(1)
         .maybeSingle()
       if (survivor) {
-        await supabase
+        await admin
           .from('whatsapp_channels')
           .update({ is_default: true })
           .eq('id', survivor.id)

@@ -34,6 +34,14 @@ export interface SaveMetaChannelInput {
   ddd?: string | null
   /** Insert path only — whether the new row becomes the account default. */
   makeDefault?: boolean
+  /**
+   * Insert path only — ties the new channel to a specific agent
+   * (self-service "connect my own WhatsApp" flow). Never touched on
+   * the update path — reassigning an existing channel's owner isn't
+   * supported here (would need the admin service-role path, like
+   * is_default).
+   */
+  assignedAgentId?: string | null
 }
 
 export type SaveMetaChannelResult =
@@ -65,6 +73,7 @@ export async function saveMetaChannel(
     label,
     ddd,
     makeDefault,
+    assignedAgentId,
   } = input
 
   if (!access_token || !phone_number_id) {
@@ -212,6 +221,7 @@ export async function saveMetaChannel(
         user_id: userId,
         provider: 'meta_cloud',
         is_default: makeDefault ?? false,
+        assigned_agent_id: assignedAgentId ?? null,
         label: label || null,
         ddd: ddd || null,
         ...baseRow,

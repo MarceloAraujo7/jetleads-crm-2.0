@@ -13,6 +13,7 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { hasMinRole } from '@/lib/auth/roles';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -29,7 +30,8 @@ import type { ChannelListItem } from './whatsapp-channels-types';
 
 export function WhatsAppConfig() {
   const t = useTranslations('Settings.whatsapp');
-  const { user, accountId, loading: authLoading, profileLoading } = useAuth();
+  const { user, accountId, accountRole, loading: authLoading, profileLoading } = useAuth();
+  const isAdmin = hasMinRole(accountRole ?? 'viewer', 'admin');
 
   const [loading, setLoading] = useState(true);
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
@@ -198,7 +200,7 @@ export function WhatsAppConfig() {
                             </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            {!c.is_default && (
+                            {!c.is_default && isAdmin && (
                               <Button
                                 variant="outline"
                                 size="sm"

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { getCurrentAccount, requireRole, toErrorResponse } from '@/lib/auth/account'
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account'
+import { hasMinRole } from '@/lib/auth/roles'
 import { saveMetaChannel } from '@/lib/whatsapp/channel-save'
 
 /**
@@ -9,10 +10,12 @@ import { saveMetaChannel } from '@/lib/whatsapp/channel-save'
  * Sibling to the legacy /api/whatsapp/config (which still manages just
  * "the default channel" for back-compat). This route lets an account
  * hold N meta_cloud channels — one per store/region/team, routed by
- * DDD via resolveChannel(). Adding/editing/removing a number requires
- * 'admin' (also enforced by RLS on whatsapp_channels, migration 037 —
- * requireRole gives a clean 403 instead of relying on the write
- * silently failing under RLS).
+ * DDD via resolveChannel(). Two write paths (also enforced by RLS,
+ * migration 037 + 042):
+ *   - admin+: full access, can create/edit/remove any channel.
+ *   - agent: "vendedor conecta o próprio WhatsApp" — can create
+ *     exactly one kind of channel: their own (assigned_agent_id =
+ *     themselves, never the account default).
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -30,10 +33,13 @@ function supabaseAdmin() {
 /**
  * GET /api/whatsapp/channels
  *
- * List every meta_cloud channel for the caller's account. Any member
- * may read. Returns DB state only (no live Meta ping — that's a
- * per-channel action via GET /api/whatsapp/channels/[id]/test) so
- * loading the list is cheap even with several numbers configured.
+ * List meta_cloud channels for the caller's account. Any member may
+ * read, but RLS (migration 042) narrows what an agent actually gets
+ * back once the account has at least one agent-owned channel: their
+ * own + the account default, not every client's number. Returns DB
+ * state only (no live Meta ping — that's a per-channel action via GET
+ * /api/whatsapp/channels/[id]/test) so loading the list is cheap even
+ * with several numbers configured.
  */
 export async function GET() {
   try {
@@ -65,13 +71,24 @@ export async function GET() {
  *
  * Add a new number to the account. Verifies with Meta, encrypts, and
  * inserts a new row (never updates an existing one — use PATCH
- * /api/whatsapp/channels/[id] for that). The very first channel an
- * account creates becomes the default automatically; subsequent ones
- * start as non-default (use the set-default action to switch).
+ * /api/whatsapp/channels/[id] for that).
+ *
+ * admin+: the very first channel an account creates becomes the
+ * default automatically; subsequent ones start as non-default (use
+ * the set-default action to switch).
+ *
+ * agent ("vendedor conecta o próprio WhatsApp"): can only create a
+ * channel assigned to themselves, and it never becomes the account
+ * default — RLS (migration 042) enforces this independently, this is
+ * just the friendly 403 + forced values.
  */
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId } = await requireRole('admin')
+    const { supabase, accountId, userId, role } = await getCurrentAccount()
+    if (!hasMinRole(role, 'agent')) {
+      return NextResponse.json({ error: "This action requires the 'agent' role or higher" }, { status: 403 })
+    }
+    const isAdmin = hasMinRole(role, 'admin')
 
     const body = await request.json()
     const { phone_number_id, waba_id, access_token, verify_token, pin, label, ddd } = body
@@ -94,7 +111,11 @@ export async function POST(request: Request) {
       pin,
       label,
       ddd,
-      makeDefault: !count,
+      // Agent-created channels never become the account default —
+      // that stays an admin-only decision (set via the service-role
+      // path, see PATCH .../[id] `set_default`).
+      makeDefault: isAdmin && !count,
+      assignedAgentId: isAdmin ? undefined : userId,
     })
 
     if (!result.ok) {
