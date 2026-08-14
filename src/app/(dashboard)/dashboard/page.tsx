@@ -256,17 +256,15 @@ export default function DashboardPage() {
             onRangeChange={handleRangeChange}
           />
         </div>
-        <div className="h-full lg:col-span-2">
+        <div className="flex flex-col gap-4 lg:col-span-2">
           <PipelineDonut
             data={pipeline}
             loading={pipelineLoading}
             currency={defaultCurrency}
           />
+          <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
         </div>
       </div>
-
-      {/* Response time */}
-      <ResponseTimeChart data={responseTime} loading={responseTimeLoading} />
 
       {/* Activity feed */}
       <ActivityFeed items={activity} loading={activityLoading} />

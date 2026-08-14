@@ -125,11 +125,10 @@
       "ariaLabel": "Valor do funil por etapa"
     },
     "responseTimeChart": {
-      "title": "Tempo médio de primeira resposta",
-      "description": "Minutos até responder a primeira mensagem não respondida de um cliente, por dia da semana",
+      "title": "Tempo de resposta",
+      "description": "Mediana da primeira resposta, por dia",
       "target": "meta {minutes}min",
-      "thisWeek": "Esta semana:",
-      "lastWeek": "Semana passada:",
+      "overallMedian": "Mediana geral",
       "noReplies": "Nenhuma resposta registrada ainda",
       "noRepliesHint": "Este gráfico se preenche conforme você responde mensagens de clientes."
     },

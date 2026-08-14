@@ -47,42 +47,19 @@ export function ResponseTimeChart({
     })) ?? []
 
   return (
-    <section className="rounded-2xl bg-card shadow-[var(--shadow)]">
-      <header className="flex items-center justify-between gap-3 px-5 py-4">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">
-            {t('title')}
-          </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('description')}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-right text-xs">
-          {thresholdMinutes > 0 && (
-            <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 font-medium text-rose-300 tabular-nums">
-              {t('target', { minutes: thresholdMinutes })}
-            </span>
-          )}
-          {data && (data.thisWeekAvg != null || data.lastWeekAvg != null) && (
-            <div>
-              <div className="text-muted-foreground">
-                {t('thisWeek')}{' '}
-                <span className="font-medium text-foreground tabular-nums">
-                  {fmt(data.thisWeekAvg)}
-                </span>
-              </div>
-              <div className="text-muted-foreground">
-                {t('lastWeek')}{' '}
-                <span className="tabular-nums">{fmt(data.lastWeekAvg)}</span>
-              </div>
-            </div>
-          )}
-        </div>
+    <section className="flex flex-1 flex-col rounded-2xl bg-card shadow-[var(--shadow)]">
+      <header className="px-5 py-4">
+        <h2 className="text-sm font-semibold text-foreground">
+          {t('title')}
+        </h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {t('description')}
+        </p>
       </header>
 
-      <div className="p-5">
+      <div className="flex-1 px-5">
         {loading || !data ? (
-          <Skeleton className="h-[260px] w-full" />
+          <Skeleton className="h-[180px] w-full" />
         ) : !hasData ? (
           <EmptyState
             icon={Clock}
@@ -94,18 +71,29 @@ export function ResponseTimeChart({
             data={chartData}
             index="day"
             categories={[CATEGORY]}
-            // 'violet' maps to Tailwind's `fill-violet-500` — matches
-            // the brand accent the hand-rolled bars used (#7c3aed).
-            colors={['violet']}
+            colors={['emerald']}
             valueFormatter={(value) => `${value.toFixed(1)}m`}
             showLegend={false}
-            yAxisWidth={48}
-            // Compact height so the chart sits well inside the card
-            // without dominating the row alongside the donut + activity feed.
-            className="h-[260px]"
+            showYAxis={false}
+            showGridLines={false}
+            className="h-[180px]"
           />
         )}
       </div>
+
+      <footer className="flex items-center justify-between rounded-b-2xl bg-card-2 px-5 py-3 text-xs">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <span>{t('overallMedian')}</span>
+          {thresholdMinutes > 0 && (
+            <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-2 py-0.5 font-medium text-rose-400 tabular-nums">
+              {t('target', { minutes: thresholdMinutes })}
+            </span>
+          )}
+        </div>
+        <span className="font-semibold text-foreground tabular-nums">
+          {fmt(data?.thisWeekAvg ?? null)}
+        </span>
+      </footer>
     </section>
   )
 }
