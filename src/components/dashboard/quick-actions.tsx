@@ -35,7 +35,7 @@ export function QuickActions() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex items-center gap-3 rounded-2xl border-hairline bg-card px-4 py-3 shadow-[var(--shadow)] transition-colors hover:bg-muted/60"
+            className="group flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-[var(--shadow)] transition-colors hover:bg-muted/60"
           >
             <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-muted ${a.tint}`}>
               <Icon className="h-4 w-4" />

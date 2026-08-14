@@ -13,7 +13,7 @@ export function SkeletonCard({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        'rounded-2xl border-hairline bg-card p-[18px] shadow-[var(--shadow)]',
+        'rounded-2xl border border-border bg-card p-[18px] shadow-[var(--shadow)]',
         className,
       )}
     >
