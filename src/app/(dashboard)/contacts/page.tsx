@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag } from '@/types';
@@ -68,9 +68,21 @@ interface ContactWithTags extends Contact {
   tags?: Tag[];
 }
 
+// `useSearchParams` opts this page out of static prerendering unless it
+// sits under a Suspense boundary — required for the "Ver lead" deep
+// link from the Inbox contact sidebar (?contact=<id>).
 export default function ContactsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContactsPageInner />
+    </Suspense>
+  );
+}
+
+function ContactsPageInner() {
   const t = useTranslations('Contacts.page');
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
@@ -249,6 +261,21 @@ export default function ContactsPage() {
     setDetailContactId(contactId);
     setDetailOpen(true);
   }
+
+  // Deep link from the Inbox contact sidebar's "Ver lead" button
+  // (?contact=<id>) — ContactDetailView fetches by id on its own, so
+  // this doesn't need the contact to already be in the loaded/paged
+  // list. Strips the param after opening so a refresh doesn't reopen it.
+  useEffect(() => {
+    const contactId = searchParams.get('contact');
+    if (!contactId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    openDetail(contactId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('contact');
+    const query = params.toString();
+    router.replace(query ? `/contacts?${query}` : '/contacts');
+  }, [searchParams, router]);
 
   function confirmDelete(contact: Contact) {
     setDeleteTarget(contact);

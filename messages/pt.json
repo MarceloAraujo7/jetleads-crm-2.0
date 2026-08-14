@@ -268,6 +268,8 @@
     },
     "sidebar": {
       "contactInfo": "Informações do contato",
+      "viewLead": "Ver lead",
+      "createDeal": "Criar negócio",
       "tags": "Tags",
       "notes": "Notas",
       "deals": "Negócios",

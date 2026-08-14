@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -11,6 +12,7 @@ import {
   Copy,
   Check,
   User,
+  Briefcase,
   Tag as TagIcon,
   DollarSign,
   StickyNote,
@@ -153,6 +155,26 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             {contact.company && (
               <p className="text-xs text-muted-foreground">{contact.company}</p>
             )}
+
+            <div className="mt-3 grid w-full grid-cols-2 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border text-foreground hover:bg-muted"
+                render={<Link href={`/contacts?contact=${contact.id}`} />}
+              >
+                <User className="h-3.5 w-3.5" />
+                {tSidebar("viewLead")}
+              </Button>
+              <Button
+                size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                render={<Link href={`/pipelines?newDealContactId=${contact.id}`} />}
+              >
+                <Briefcase className="h-3.5 w-3.5" />
+                {tSidebar("createDeal")}
+              </Button>
+            </div>
           </div>
 
           {/* Phone */}

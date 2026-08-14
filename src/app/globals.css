@@ -167,17 +167,23 @@ html[data-theme="violet"] {
 }
 
 html[data-theme="emerald"] {
-  --primary: oklch(0.62 0.16 162);
-  --primary-foreground: oklch(0.16 0.02 162);
-  --primary-hover: oklch(0.68 0.15 162);
-  --primary-soft: oklch(0.62 0.16 162 / 0.12);
-  --primary-soft-2: oklch(0.62 0.16 162 / 0.22);
-  --ring: oklch(0.62 0.16 162);
-  --chart-1: oklch(0.62 0.16 162);
+  /* Jetleads Prospect brand green — exact conversion of the
+     prototype's #59D91E (hover #7ae83f, on-primary text #0d1a05),
+     not an approximate "emerald" hue. Verified with culori:
+     oklch(#59D91E) = 0.782 0.237 138.8. The old values here
+     (0.62 0.16 162, a bluer/duller green) were never actually this
+     brand's color — this replaces them with the real one. */
+  --primary: oklch(0.782 0.237 138.8);
+  --primary-foreground: oklch(0.199 0.044 134.4);
+  --primary-hover: oklch(0.834 0.225 137);
+  --primary-soft: oklch(0.782 0.237 138.8 / 0.12);
+  --primary-soft-2: oklch(0.782 0.237 138.8 / 0.22);
+  --ring: oklch(0.782 0.237 138.8);
+  --chart-1: oklch(0.782 0.237 138.8);
   --chart-2: oklch(0.7 0.14 195);
-  --sidebar-primary: oklch(0.62 0.16 162);
-  --sidebar-primary-foreground: oklch(0.16 0.02 162);
-  --sidebar-ring: oklch(0.62 0.16 162);
+  --sidebar-primary: oklch(0.782 0.237 138.8);
+  --sidebar-primary-foreground: oklch(0.199 0.044 134.4);
+  --sidebar-ring: oklch(0.782 0.237 138.8);
 }
 
 html[data-theme="cobalt"] {

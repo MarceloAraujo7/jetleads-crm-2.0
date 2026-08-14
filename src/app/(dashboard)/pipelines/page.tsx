@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Suspense, useState, useEffect, useRef, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
@@ -45,8 +46,21 @@ const SPEC_DEFAULT_STAGES = [
   { name: "Won", color: "#22c55e", position: 4 }, // green
 ];
 
+// `useSearchParams` opts this page out of static prerendering unless it
+// sits under a Suspense boundary — required for the "Criar negócio"
+// deep link from the Inbox contact sidebar (?newDealContactId=...).
 export default function PipelinesPage() {
+  return (
+    <Suspense fallback={null}>
+      <PipelinesPageInner />
+    </Suspense>
+  );
+}
+
+function PipelinesPageInner() {
   const t = useTranslations("Pipelines.page");
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
@@ -69,6 +83,7 @@ export default function PipelinesPage() {
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
+  const [defaultContactId, setDefaultContactId] = useState<string>("");
 
   // Guard against double-seeding (React StrictMode double-effect in dev).
   const seedAttempted = useRef(false);
@@ -233,9 +248,10 @@ export default function PipelinesPage() {
   );
 
   const handleAddDeal = useCallback(
-    (stageId?: string) => {
+    (stageId?: string, contactId?: string) => {
       setEditingDeal(null);
       setDefaultStageId(stageId ?? stages[0]?.id ?? "");
+      setDefaultContactId(contactId ?? "");
       setDealFormOpen(true);
     },
     [stages],
@@ -244,8 +260,28 @@ export default function PipelinesPage() {
   const handleEditDeal = useCallback((deal: Deal) => {
     setEditingDeal(deal);
     setDefaultStageId(deal.stage_id);
+    setDefaultContactId("");
     setDealFormOpen(true);
   }, []);
+
+  // Deep link from the Inbox contact sidebar's "Criar negócio" button
+  // (?newDealContactId=<id>). Waits for stages to be loaded so
+  // handleAddDeal's stage fallback has something to pick from, then
+  // strips the param so a refresh doesn't reopen the form.
+  useEffect(() => {
+    const contactId = searchParams.get("newDealContactId");
+    if (!contactId || stages.length === 0) return;
+    handleAddDeal(undefined, contactId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("newDealContactId");
+    const query = params.toString();
+    router.replace(query ? `/pipelines?${query}` : "/pipelines");
+    // handleAddDeal is intentionally omitted — it's stable-ish via
+    // useCallback but re-running this on every stages-array identity
+    // change (from handleAddDeal's own dep) would fight the param
+    // deletion below. Only the param + stages readiness should retrigger it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, stages.length, router]);
 
   async function handleCreatePipeline() {
     const name = newPipelineName.trim();
@@ -487,6 +523,7 @@ export default function PipelinesPage() {
         pipelineId={selectedPipelineId}
         stages={stages}
         defaultStageId={defaultStageId}
+        defaultContactId={defaultContactId}
         onSaved={refreshDeals}
       />
     </div>
