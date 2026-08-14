@@ -12,12 +12,12 @@ import {
   type TemplateSendValues,
 } from '@/components/inbox/template-picker';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -378,19 +378,16 @@ export function ContactDetailView({
 
   return (
     <>
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0"
-      >
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[min(90vh,780px)] w-full flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground sm:max-w-lg">
         {loading || !contact ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex items-center justify-center h-full min-h-64">
             <Loader2 className="size-6 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="flex flex-col h-full">
+          <div className="flex flex-col h-full min-h-0">
             {/* Header */}
-            <SheetHeader className="p-4 border-b border-border/50">
+            <DialogHeader className="shrink-0 p-4 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <Avatar className="size-12 bg-muted border border-border">
                   <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
@@ -398,12 +395,12 @@ export function ContactDetailView({
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <SheetTitle className="text-popover-foreground truncate">
+                  <DialogTitle className="text-popover-foreground truncate">
                     {contact.name || t('unnamed')}
-                  </SheetTitle>
-                  <SheetDescription className="text-muted-foreground text-xs mt-0.5">
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground text-xs mt-0.5">
                     {t('contactDetailsDesc')}
-                  </SheetDescription>
+                  </DialogDescription>
                   <div className="flex flex-wrap items-center gap-3 mt-1.5 text-xs text-muted-foreground">
                     <button
                       onClick={copyPhone}
@@ -447,7 +444,7 @@ export function ContactDetailView({
                   {t('sendTemplateBtn')}
                 </Button>
               </div>
-            </SheetHeader>
+            </DialogHeader>
 
             {/* Tabs */}
             <Tabs defaultValue="details" className="flex-1 flex flex-col min-h-0">
@@ -747,8 +744,8 @@ export function ContactDetailView({
             </Tabs>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
     <TemplatePicker
       open={templatePickerOpen}
       onOpenChange={setTemplatePickerOpen}

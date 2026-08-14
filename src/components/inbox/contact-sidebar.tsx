@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import type { Contact, Deal, ContactNote, PipelineStage, Tag } from "@/types";
+import { ContactDetailView } from "@/components/contacts/contact-detail-view";
+import { DealForm } from "@/components/pipelines/deal-form";
 import {
   Phone,
   Mail,
@@ -35,6 +37,38 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+
+  const [viewLeadOpen, setViewLeadOpen] = useState(false);
+  const [dealFormOpen, setDealFormOpen] = useState(false);
+  const [defaultPipeline, setDefaultPipeline] = useState<{
+    id: string;
+    stages: PipelineStage[];
+  } | null>(null);
+
+  // Loaded once per account (not per contact) — pipelines aren't
+  // contact-specific, this just gives DealForm the pipelineId/stages
+  // it requires so "Criar negócio" can open in place instead of
+  // navigating away to /pipelines.
+  useEffect(() => {
+    if (!accountId) return;
+    const supabase = createClient();
+    (async () => {
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("id")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (!pipeline) return;
+      const { data: stages } = await supabase
+        .from("pipeline_stages")
+        .select("*")
+        .eq("pipeline_id", pipeline.id)
+        .order("position", { ascending: true });
+      setDefaultPipeline({ id: pipeline.id, stages: stages ?? [] });
+    })();
+  }, [accountId]);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -160,17 +194,27 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 variant="outline"
                 size="sm"
                 className="h-auto justify-center rounded-xl border-transparent bg-card-2 py-2.5 text-xs font-semibold text-foreground hover:bg-muted"
-                render={<Link href={`/contacts?contact=${contact.id}`} />}
+                onClick={() => setViewLeadOpen(true)}
               >
                 {tSidebar("viewLead")}
               </Button>
-              <Button
-                size="sm"
-                className="h-auto justify-center rounded-xl bg-primary-soft py-2.5 text-xs font-semibold text-primary hover:bg-primary-soft-2"
-                render={<Link href={`/pipelines?newDealContactId=${contact.id}`} />}
-              >
-                {tSidebar("createDeal")}
-              </Button>
+              {defaultPipeline ? (
+                <Button
+                  size="sm"
+                  className="h-auto justify-center rounded-xl bg-primary-soft py-2.5 text-xs font-semibold text-primary hover:bg-primary-soft-2"
+                  onClick={() => setDealFormOpen(true)}
+                >
+                  {tSidebar("createDeal")}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-auto justify-center rounded-xl bg-primary-soft py-2.5 text-xs font-semibold text-primary hover:bg-primary-soft-2"
+                  render={<Link href={`/pipelines?newDealContactId=${contact.id}`} />}
+                >
+                  {tSidebar("createDeal")}
+                </Button>
+              )}
             </div>
 
             <div className="mt-3.5 space-y-1">
@@ -304,6 +348,23 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           </div>
         </div>
       </ScrollArea>
+
+      <ContactDetailView
+        open={viewLeadOpen}
+        onOpenChange={setViewLeadOpen}
+        contactId={contact.id}
+        onUpdated={fetchContactData}
+      />
+      {defaultPipeline && (
+        <DealForm
+          open={dealFormOpen}
+          onOpenChange={setDealFormOpen}
+          pipelineId={defaultPipeline.id}
+          stages={defaultPipeline.stages}
+          defaultContactId={contact.id}
+          onSaved={fetchContactData}
+        />
+      )}
     </div>
   );
 }

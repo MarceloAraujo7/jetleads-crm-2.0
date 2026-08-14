@@ -145,7 +145,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Metric cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         {metricsLoading || !metrics ? (
           Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
         ) : (
