@@ -132,14 +132,7 @@ export function PipelineBoard({
       >
         {activeDeal ? (
           <div className="opacity-90">
-            <DealCard
-              deal={activeDeal}
-              stage={
-                sortedStages.find((s) => s.id === activeDeal.stage_id) ?? null
-              }
-              onEdit={() => {}}
-              isOverlay
-            />
+            <DealCard deal={activeDeal} onEdit={() => {}} isOverlay />
           </div>
         ) : null}
       </DragOverlay>
@@ -211,21 +204,21 @@ function StageColumn({
     // restore the flex-1 share-the-row behavior. The droppable ref is
     // on the inner messages region below — intentionally NOT here, so
     // a drag over the column header doesn't highlight the whole column.
-    <div className="flex w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border border-border bg-card/60 p-4 lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none">
-      {/* 3px colored top border — sits above the column's padding */}
-      <div
-        className="-mx-4 -mt-4 h-[3px] rounded-t-xl"
-        style={{ backgroundColor: stage.color }}
-      />
-      <div className="flex items-center justify-between pt-3">
-        <h3 className="truncate text-sm font-semibold text-foreground">
+    <div className="flex w-[85vw] min-w-[260px] max-w-[320px] shrink-0 snap-start flex-col lg:w-auto lg:max-w-none lg:flex-1 lg:basis-[260px] lg:shrink lg:snap-none">
+      <div className="flex items-center justify-between">
+        <h3 className="flex items-center gap-2 truncate text-sm font-semibold text-foreground">
+          <span
+            aria-hidden
+            className="size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: stage.color }}
+          />
           {stage.name}
         </h3>
         <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
           {deals.length}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="pl-4 text-xs text-muted-foreground">
         {formatCurrency(totalValue, currency)}
       </p>
 
@@ -243,12 +236,7 @@ function StageColumn({
           </div>
         ) : (
           deals.map((deal) => (
-            <DraggableDealCard
-              key={deal.id}
-              deal={deal}
-              stage={stage}
-              onEdit={onEditDeal}
-            />
+            <DraggableDealCard key={deal.id} deal={deal} onEdit={onEditDeal} />
           ))
         )}
       </div>
@@ -268,11 +256,9 @@ function StageColumn({
 
 function DraggableDealCard({
   deal,
-  stage,
   onEdit,
 }: {
   deal: Deal;
-  stage: PipelineStage;
   onEdit: (deal: Deal) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -286,7 +272,7 @@ function DraggableDealCard({
       {...attributes}
       style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
     >
-      <DealCard deal={deal} stage={stage} onEdit={onEdit} />
+      <DealCard deal={deal} onEdit={onEdit} />
     </div>
   );
 }

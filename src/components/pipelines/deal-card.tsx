@@ -1,13 +1,12 @@
 "use client";
 
-import type { Deal, PipelineStage } from "@/types";
+import type { Deal } from "@/types";
 import { Calendar, Check, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
 
 interface DealCardProps {
   deal: Deal;
-  stage: PipelineStage | null;
   onEdit: (deal: Deal) => void;
   isOverlay?: boolean;
 }
@@ -26,7 +25,7 @@ function initials(name?: string, fallback?: string) {
   return source.charAt(0).toUpperCase();
 }
 
-export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
+export function DealCard({ deal, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
@@ -41,19 +40,10 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         e.stopPropagation();
         onEdit(deal);
       }}
-      className={`group relative w-full cursor-pointer rounded-xl border border-border/50 bg-muted/70 pl-4 pr-3 py-3 text-left shadow-sm transition-all ${
-        isOverlay
-          ? "shadow-xl"
-          : "hover:-translate-y-0.5 hover:border-border hover:bg-muted hover:shadow-lg"
+      className={`group relative w-full cursor-pointer rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-[var(--shadow)] transition-all ${
+        isOverlay ? "shadow-xl" : "hover:-translate-y-0.5 hover:shadow-lg"
       }`}
     >
-      {/* 4px left accent bar using stage color */}
-      <span
-        aria-hidden
-        className="absolute left-0 top-0 h-full w-1 rounded-l-xl"
-        style={{ backgroundColor: stage?.color ?? "#94a3b8" }}
-      />
-
       <div className="flex items-start justify-between gap-2">
         <h4 className="flex-1 text-sm font-semibold leading-snug text-foreground break-words">
           {deal.title}
