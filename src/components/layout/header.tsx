@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
-import { Bell, LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { NotificationsPopover } from "@/components/layout/notifications-popover";
+import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
 import {
   Avatar,
   AvatarFallback,
@@ -55,8 +54,6 @@ export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
   const titleKey = getPageTitleKey(pathname);
-  const unreadNotifications = useUnreadNotifications();
-  const isNotificationsActive = pathname.startsWith("/notifications");
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -81,30 +78,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
-        <Link
-          href="/notifications"
-          aria-label={
-            unreadNotifications > 0
-              ? t("unreadNotifications", { count: unreadNotifications })
-              : t("notifications")
-          }
-          className={cn(
-            "relative flex h-9 w-9 items-center justify-center rounded-md transition-colors hover:bg-muted",
-            isNotificationsActive
-              ? "bg-primary/10 text-primary"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Bell className="h-[18px] w-[18px]" />
-          {unreadNotifications > 0 && (
-            <span
-              aria-hidden
-              className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground"
-            >
-              {unreadNotifications > 9 ? "9+" : unreadNotifications}
-            </span>
-          )}
-        </Link>
+        <NotificationsPopover />
 
         <ModeToggle />
 

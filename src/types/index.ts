@@ -121,6 +121,12 @@ export interface Contact {
    *  to 'manual' at the DB level, but optional here since most
    *  existing `select()` calls don't fetch it explicitly. */
   source?: ContactSource;
+  /** Seller/agent this lead is assigned to (migration 043). Filled by
+   *  lead distribution, or manually. */
+  assigned_agent_id?: string | null;
+  /** Which lead base (client/region pool) this contact belongs to
+   *  (migration 047). `null`/absent = the legacy account-wide pool. */
+  lead_base_id?: string | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the
@@ -676,12 +682,40 @@ export interface Campaign {
   id: string;
   account_id: string;
   name: string;
+  /** Manual fallback audience label/count — only used when the
+   *  campaign has no `lead_base_id`. Once a lead base is linked, the
+   *  UI shows the base's name and its live contact count instead. */
   audience_label?: string | null;
   audience_count?: number | null;
+  /** The lead base (client/region pool) this campaign owns, if any
+   *  (migration 047). `null` = legacy free-text audience only. */
+  lead_base_id?: string | null;
   status: CampaignStatus;
   created_by?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export type LeadDistributionStrategy = 'least_loaded' | 'round_robin' | 'equal';
+
+export interface LeadBase {
+  id: string;
+  account_id: string;
+  name: string;
+  description?: string | null;
+  distribution_enabled: boolean;
+  distribution_strategy: LeadDistributionStrategy;
+  distribution_cursor?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LeadBaseMember {
+  id: string;
+  lead_base_id: string;
+  user_id: string;
+  daily_lead_quota?: number | null;
+  created_at: string;
 }
 
 export interface CampaignAction {

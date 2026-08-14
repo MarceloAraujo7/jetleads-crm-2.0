@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
+import { Label } from '@/components/ui/label';
 import {
   dedupeByPhone,
   isUniqueViolation,
@@ -154,21 +155,49 @@ function ImportPreviewTags({
   );
 }
 
+interface LeadBaseOption {
+  id: string;
+  name: string;
+}
+
 interface ImportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImported: () => void;
+  /** Pre-selects a lead base (e.g. opened from within a Campanha).
+   *  When `lockLeadBase` is also set, the picker is hidden and every
+   *  imported contact lands in that base. */
+  defaultLeadBaseId?: string | null;
+  lockLeadBase?: boolean;
 }
 
 export function ImportModal({
   open,
   onOpenChange,
   onImported,
+  defaultLeadBaseId = null,
+  lockLeadBase = false,
 }: ImportModalProps) {
   const t = useTranslations('Contacts.importModal');
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [leadBases, setLeadBases] = useState<LeadBaseOption[]>([]);
+  const [leadBaseId, setLeadBaseId] = useState<string>(defaultLeadBaseId ?? '');
+
+  useEffect(() => {
+    if (!open || !accountId) return;
+    setLeadBaseId(defaultLeadBaseId ?? '');
+    if (lockLeadBase) return;
+    (async () => {
+      const { data } = await supabase
+        .from('lead_bases')
+        .select('id, name')
+        .order('created_at', { ascending: false });
+      setLeadBases(data ?? []);
+    })();
+  }, [open, accountId, defaultLeadBaseId, lockLeadBase, supabase]);
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedContactRow[]>([]);
@@ -326,6 +355,7 @@ export function ImportModal({
           email: row.email || null,
           company: row.company || null,
           source: 'csv_import' as const,
+          lead_base_id: leadBaseId || null,
         }));
 
         const { data, error } = await supabase
@@ -483,6 +513,24 @@ export function ImportModal({
             <Download className="size-3.5" />
             {t('downloadTemplate')}
           </button>
+
+          {!lockLeadBase && (
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">{t('leadBase')}</Label>
+              <select
+                value={leadBaseId}
+                onChange={(e) => setLeadBaseId(e.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+              >
+                <option value="">{t('leadBaseGeneral')}</option>
+                {leadBases.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div
             role="button"

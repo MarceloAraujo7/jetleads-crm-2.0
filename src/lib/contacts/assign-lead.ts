@@ -29,6 +29,13 @@ export interface PickAgentForNewLeadOptions {
   channelId?: string | null
   /** Defaults to 'least_loaded' — the only strategy that existed before this. */
   strategy?: DistributionStrategy
+  /** Scopes the agent pool, quota, and load-count to one lead base
+   *  (lead_base_members / contacts.lead_base_id) instead of the whole
+   *  account (profiles / all of the account's contacts). Omit for the
+   *  legacy account-wide pool — this is what makes lead bases opt-in
+   *  and keeps every account/campaign that predates them working
+   *  exactly as before. */
+  leadBaseId?: string | null
 }
 
 interface AgentRow {
@@ -42,6 +49,7 @@ export async function pickAgentForNewLead(
   opts: PickAgentForNewLeadOptions = {},
 ): Promise<string | null> {
   const strategy = opts.strategy ?? 'least_loaded'
+  const leadBaseId = opts.leadBaseId ?? null
 
   if (strategy !== 'equal' && opts.channelId) {
     const { data: channel } = await db
@@ -52,13 +60,9 @@ export async function pickAgentForNewLead(
     if (channel?.assigned_agent_id) return channel.assigned_agent_id as string
   }
 
-  const { data: agentsData } = await db
-    .from('profiles')
-    .select('user_id, daily_lead_quota')
-    .eq('account_id', accountId)
-    .eq('account_role', 'agent')
-    .order('user_id', { ascending: true })
-  const agents = (agentsData ?? []) as AgentRow[]
+  const agents = leadBaseId
+    ? await loadLeadBaseAgents(db, leadBaseId)
+    : await loadAccountAgents(db, accountId)
   if (agents.length === 0) return null
 
   const respectQuota = strategy !== 'equal'
@@ -70,12 +74,14 @@ export async function pickAgentForNewLead(
   if (respectQuota && agents.some((a) => a.daily_lead_quota != null)) {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
-    const { data: todayRows } = await db
+    let query = db
       .from('contacts')
       .select('assigned_agent_id')
       .eq('account_id', accountId)
       .not('assigned_agent_id', 'is', null)
       .gte('created_at', todayStart.toISOString())
+    query = leadBaseId ? query.eq('lead_base_id', leadBaseId) : query
+    const { data: todayRows } = await query
     todayCountByAgent = new Map<string, number>()
     for (const row of todayRows ?? []) {
       const id = row.assigned_agent_id as string
@@ -90,17 +96,19 @@ export async function pickAgentForNewLead(
   }
 
   if (strategy === 'round_robin') {
-    return pickRoundRobin(db, accountId, agents, isEligible)
+    return pickRoundRobin(db, accountId, agents, isEligible, leadBaseId)
   }
 
   // least_loaded and equal both pick the minimum-load eligible agent —
   // 'equal' just never excludes anyone on quota (isEligible is always
   // true there) and skipped the channel shortcut above.
-  const { data: loadRows } = await db
+  let loadQuery = db
     .from('contacts')
     .select('assigned_agent_id')
     .eq('account_id', accountId)
     .not('assigned_agent_id', 'is', null)
+  loadQuery = leadBaseId ? loadQuery.eq('lead_base_id', leadBaseId) : loadQuery
+  const { data: loadRows } = await loadQuery
 
   const loadByAgent = new Map<string, number>()
   for (const a of agents) loadByAgent.set(a.user_id, 0)
@@ -121,6 +129,25 @@ export async function pickAgentForNewLead(
   return picked
 }
 
+async function loadAccountAgents(db: SupabaseClient, accountId: string): Promise<AgentRow[]> {
+  const { data } = await db
+    .from('profiles')
+    .select('user_id, daily_lead_quota')
+    .eq('account_id', accountId)
+    .eq('account_role', 'agent')
+    .order('user_id', { ascending: true })
+  return (data ?? []) as AgentRow[]
+}
+
+async function loadLeadBaseAgents(db: SupabaseClient, leadBaseId: string): Promise<AgentRow[]> {
+  const { data } = await db
+    .from('lead_base_members')
+    .select('user_id, daily_lead_quota')
+    .eq('lead_base_id', leadBaseId)
+    .order('user_id', { ascending: true })
+  return (data ?? []) as AgentRow[]
+}
+
 /**
  * Fixed rotation: advances past `accounts.lead_distribution_cursor`
  * in the stable (user_id-ordered) agent list, skipping anyone over
@@ -133,16 +160,28 @@ async function pickRoundRobin(
   accountId: string,
   agents: AgentRow[],
   isEligible: (agentId: string) => boolean,
+  leadBaseId: string | null,
 ): Promise<string | null> {
   const eligible = agents.map((a) => a.user_id).filter(isEligible)
   if (eligible.length === 0) return null
 
-  const { data: account } = await db
-    .from('accounts')
-    .select('lead_distribution_cursor')
-    .eq('id', accountId)
-    .maybeSingle()
-  const cursor = account?.lead_distribution_cursor as string | null | undefined
+  const cursorId = leadBaseId ?? accountId
+  let cursor: string | null | undefined
+  if (leadBaseId) {
+    const { data } = await db
+      .from('lead_bases')
+      .select('distribution_cursor')
+      .eq('id', cursorId)
+      .maybeSingle()
+    cursor = data?.distribution_cursor
+  } else {
+    const { data } = await db
+      .from('accounts')
+      .select('lead_distribution_cursor')
+      .eq('id', cursorId)
+      .maybeSingle()
+    cursor = data?.lead_distribution_cursor
+  }
 
   let nextIndex = 0
   if (cursor) {
@@ -155,7 +194,11 @@ async function pickRoundRobin(
   }
   const picked = eligible[nextIndex]
 
-  await db.from('accounts').update({ lead_distribution_cursor: picked }).eq('id', accountId)
+  if (leadBaseId) {
+    await db.from('lead_bases').update({ distribution_cursor: picked }).eq('id', cursorId)
+  } else {
+    await db.from('accounts').update({ lead_distribution_cursor: picked }).eq('id', cursorId)
+  }
 
   return picked
 }
@@ -174,27 +217,40 @@ export async function maybeDistributeNewLead(
   opts: PickAgentForNewLeadOptions = {},
 ): Promise<void> {
   try {
-    const { data: account } = await db
-      .from('accounts')
-      .select('lead_distribution_enabled, lead_distribution_strategy')
-      .eq('id', accountId)
-      .maybeSingle()
-    if (!account?.lead_distribution_enabled) return
-
-    // account_id filters below are defense-in-depth, not the primary
+    // account_id filter below is defense-in-depth, not the primary
     // guard — callers must already scope contactId to this account,
     // but this stops a wrong/foreign id from silently pulling a
     // contact from a different tenant into this account's pool.
     const { data: contact } = await db
       .from('contacts')
-      .select('assigned_agent_id')
+      .select('assigned_agent_id, lead_base_id')
       .eq('id', contactId)
       .eq('account_id', accountId)
       .maybeSingle()
     if (!contact || contact.assigned_agent_id) return
 
-    const strategy = (account.lead_distribution_strategy as DistributionStrategy) ?? 'least_loaded'
-    const agentId = await pickAgentForNewLead(db, accountId, { ...opts, strategy })
+    const leadBaseId = (contact.lead_base_id as string | null) ?? null
+    let strategy: DistributionStrategy
+
+    if (leadBaseId) {
+      const { data: base } = await db
+        .from('lead_bases')
+        .select('distribution_enabled, distribution_strategy')
+        .eq('id', leadBaseId)
+        .maybeSingle()
+      if (!base?.distribution_enabled) return
+      strategy = (base.distribution_strategy as DistributionStrategy) ?? 'least_loaded'
+    } else {
+      const { data: account } = await db
+        .from('accounts')
+        .select('lead_distribution_enabled, lead_distribution_strategy')
+        .eq('id', accountId)
+        .maybeSingle()
+      if (!account?.lead_distribution_enabled) return
+      strategy = (account.lead_distribution_strategy as DistributionStrategy) ?? 'least_loaded'
+    }
+
+    const agentId = await pickAgentForNewLead(db, accountId, { ...opts, strategy, leadBaseId })
     if (!agentId) return
 
     await db

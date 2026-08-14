@@ -50,6 +50,11 @@
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
     "unreadNotifications": "{count} {count, plural, =1 {notificação não lida} other {notificações não lidas}}",
+    "notificationsMarkAllRead": "Marcar tudo como lido",
+    "notificationsMarkAllFailed": "Falha ao marcar tudo como lido",
+    "notificationsEmpty": "Nenhuma notificação ainda",
+    "notificationsEmptyHint": "Avisos de conversas atribuídas a você aparecem aqui.",
+    "notificationsViewAll": "Ver todas",
     "contacts": "Leads",
     "campaigns": "Campanhas",
     "pipelines": "Kanban",
@@ -289,6 +294,19 @@
       "networkError": "Não foi possível conectar ao servidor."
     }
   },
+  "Notifications": {
+    "page": {
+      "title": "Notificações",
+      "subtitle": "Conversas que outros colegas atribuem a você aparecem aqui.",
+      "markAllRead": "Marcar tudo como lido",
+      "empty": "Nenhuma notificação ainda",
+      "emptyHint": "Você verá um aviso aqui quando alguém te atribuir uma conversa.",
+      "unread": "Não lida",
+      "retry": "Tentar novamente",
+      "toastMarkAllFailed": "Falha ao marcar tudo como lido",
+      "toastMarkReadFailed": "Falha ao marcar a notificação como lida"
+    }
+  },
   "Contacts": {
     "page": {
       "title": "Leads",
@@ -482,7 +500,9 @@
       "toastFailed": "{count} contato falhou ao importar",
       "toastFailed_plural": "{count} contatos falharam ao importar",
       "toastError": "Falha na importação",
-      "downloadTemplate": "Baixar planilha-modelo"
+      "downloadTemplate": "Baixar planilha-modelo",
+      "leadBase": "Base de leads",
+      "leadBaseGeneral": "Geral (sem base específica)"
     },
     "customFields": {
       "title": "Campos personalizados",

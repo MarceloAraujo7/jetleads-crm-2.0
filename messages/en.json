@@ -50,6 +50,11 @@
     "inbox": "Inbox",
     "notifications": "Notifications",
     "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
+    "notificationsMarkAllRead": "Mark all as read",
+    "notificationsMarkAllFailed": "Failed to mark all as read",
+    "notificationsEmpty": "No notifications yet",
+    "notificationsEmptyHint": "Alerts for conversations assigned to you show up here.",
+    "notificationsViewAll": "View all",
     "contacts": "Leads",
     "campaigns": "Campaigns",
     "pipelines": "Kanban",
@@ -289,6 +294,19 @@
       "networkError": "Couldn’t reach the server."
     }
   },
+  "Notifications": {
+    "page": {
+      "title": "Notifications",
+      "subtitle": "Conversations other teammates assign to you show up here.",
+      "markAllRead": "Mark all as read",
+      "empty": "No notifications yet",
+      "emptyHint": "You'll see an alert here when someone assigns you a conversation.",
+      "unread": "Unread",
+      "retry": "Retry",
+      "toastMarkAllFailed": "Failed to mark all as read",
+      "toastMarkReadFailed": "Failed to mark notification as read"
+    }
+  },
   "Contacts": {
     "page": {
       "title": "Leads",
@@ -482,7 +500,9 @@
       "toastFailed": "{count} contact failed to import",
       "toastFailed_plural": "{count} contacts failed to import",
       "toastError": "Import failed",
-      "downloadTemplate": "Download CSV template"
+      "downloadTemplate": "Download CSV template",
+      "leadBase": "Lead base",
+      "leadBaseGeneral": "General (no specific base)"
     },
     "customFields": {
       "title": "Custom fields",
