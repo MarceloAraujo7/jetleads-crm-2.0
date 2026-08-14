@@ -48,6 +48,7 @@
     "dashboard": "Painel",
     "inbox": "Caixa de entrada",
     "notifications": "Notificações",
+    "unreadNotifications": "{count} {count, plural, =1 {notificação não lida} other {notificações não lidas}}",
     "contacts": "Leads",
     "pipelines": "Kanban",
     "broadcasts": "Disparos",

@@ -7,9 +7,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTheme } from "@/hooks/use-theme";
 import { useTotalUnread } from "@/hooks/use-total-unread";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
-  Bell,
   Bot,
   Crown,
   GitBranch,
@@ -106,7 +104,6 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard, group: "operations" },
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare, group: "operations" },
-  { href: "/notifications", labelKey: "notifications", icon: Bell, group: "operations" },
   { href: "/contacts", labelKey: "contacts", icon: Users, group: "operations" },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch, group: "growth" },
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, group: "growth" },
@@ -135,7 +132,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const { sidebarStyle } = useTheme();
   const totalUnread = useTotalUnread();
-  const unreadNotifications = useUnreadNotifications();
   // "icons"/"grouped" only apply at the lg+ breakpoint — the mobile
   // drawer is a full-screen overlay opened specifically to navigate,
   // where an icon-only rail saves no space that matters and only
@@ -259,18 +255,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
 
-              // Unlike the inbox dot, the notifications count stays visible
-              // even while the page is active — it reflects unread state
-              // (cleared by marking notifications read), not "currently
-              // viewing this section".
-              const showNotificationBadge =
-                item.href === "/notifications" && unreadNotifications > 0;
-
               const extraAnnouncement = showUnreadDot
                 ? t("unreadConversations", { count: totalUnread })
-                : showNotificationBadge
-                  ? t("unreadNotifications", { count: unreadNotifications })
-                  : null;
+                : null;
 
               return (
                 <li key={item.href}>
@@ -300,14 +287,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                           <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
                         </span>
                       )}
-                      {iconsOnDesktop && showNotificationBadge && (
-                        <span
-                          aria-hidden
-                          className="absolute -top-1.5 -right-1.5 hidden h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[8px] font-semibold text-primary-foreground lg:flex"
-                        >
-                          {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                        </span>
-                      )}
                     </span>
                     <span className={cn("flex-1", iconsOnDesktop && "lg:hidden")}>
                       {t(item.labelKey as string)}
@@ -327,14 +306,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       <span aria-hidden className="relative flex h-2 w-2">
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                      </span>
-                    )}
-                    {!iconsOnDesktop && showNotificationBadge && (
-                      <span
-                        aria-hidden
-                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
-                      >
-                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
                       </span>
                     )}
                   </Link>

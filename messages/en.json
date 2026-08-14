@@ -48,6 +48,7 @@
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "notifications": "Notifications",
+    "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
     "contacts": "Leads",
     "pipelines": "Kanban",
     "broadcasts": "Broadcasts",
