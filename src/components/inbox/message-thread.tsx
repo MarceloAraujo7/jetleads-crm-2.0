@@ -142,14 +142,16 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
 ];
 
 /**
- * Flat background applied to the chat area (both the active thread
- * and the empty state) — matches the redesign's plain surface look.
- * Used to be a tiled WhatsApp-style doodle pattern (`/inbox-doodle.svg`);
+ * Card shell applied to the whole thread panel (both the active
+ * thread and the empty state) — floating card matching the other two
+ * Inbox panels (conversation list, contact sidebar), not the old
+ * bordered/edge-to-edge layout. Used to be a tiled WhatsApp-style
+ * doodle pattern (`/inbox-doodle.svg`) on a flat page background;
  * dropped for a cleaner, less busy chat area.
  *
  * Defined once at module scope so the two render paths can't drift.
  */
-const DOODLE_BG_CLASSES = "bg-background";
+const DOODLE_BG_CLASSES = "rounded-2xl bg-card shadow-[var(--shadow)] overflow-hidden";
 
 export function MessageThread({
   conversation,

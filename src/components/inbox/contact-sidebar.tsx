@@ -4,15 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { cn } from "@/lib/utils";
 import type { Contact, Deal, ContactNote, Tag } from "@/types";
 import {
   Phone,
   Mail,
   Copy,
   Check,
-  User,
-  Briefcase,
   Tag as TagIcon,
   DollarSign,
   StickyNote,
@@ -123,7 +120,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
   if (!contact) {
     return (
-      <div className="flex h-full w-70 items-center justify-center border-l border-border bg-card">
+      <div className="flex h-full w-70 items-center justify-center rounded-2xl bg-card shadow-[var(--shadow)]">
         <p className="text-sm text-muted-foreground">{tThread("selectConversation")}</p>
       </div>
     );
@@ -133,188 +130,175 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const initials = displayName.charAt(0).toUpperCase();
 
   return (
-    <div className="flex h-full w-70 flex-col border-l border-border bg-card">
-      <ScrollArea className="flex-1">
-        <div className="p-4">
-          {/* Contact Info */}
-          <div className="flex flex-col items-center text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
-              {contact.avatar_url ? (
-                <img
-                  src={contact.avatar_url}
-                  alt={displayName}
-                  className="h-16 w-16 rounded-full object-cover"
-                />
-              ) : (
-                initials
+    <div className="h-full w-70">
+      <ScrollArea className="h-full">
+        <div className="flex flex-col gap-4 p-4">
+          {/* Card A — identity + quick actions */}
+          <div className="shrink-0 rounded-2xl bg-card p-[18px] shadow-[var(--shadow)]">
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-soft text-lg font-bold text-primary">
+                {contact.avatar_url ? (
+                  <img
+                    src={contact.avatar_url}
+                    alt={displayName}
+                    className="h-14 w-14 rounded-full object-cover"
+                  />
+                ) : (
+                  initials
+                )}
+              </div>
+              <h3 className="mt-1.5 text-[15px] font-bold text-foreground">
+                {displayName}
+              </h3>
+              {contact.company && (
+                <p className="text-xs text-muted-foreground">{contact.company}</p>
               )}
             </div>
-            <h3 className="mt-3 text-sm font-semibold text-foreground">
-              {displayName}
-            </h3>
-            {contact.company && (
-              <p className="text-xs text-muted-foreground">{contact.company}</p>
-            )}
 
-            <div className="mt-3 grid w-full grid-cols-2 gap-2">
+            <div className="mt-3.5 grid grid-cols-2 gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="border-border text-foreground hover:bg-muted"
+                className="h-auto justify-center rounded-xl border-transparent bg-card-2 py-2.5 text-xs font-semibold text-foreground hover:bg-muted"
                 render={<Link href={`/contacts?contact=${contact.id}`} />}
               >
-                <User className="h-3.5 w-3.5" />
                 {tSidebar("viewLead")}
               </Button>
               <Button
                 size="sm"
-                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                className="h-auto justify-center rounded-xl bg-primary-soft py-2.5 text-xs font-semibold text-primary hover:bg-primary-soft-2"
                 render={<Link href={`/pipelines?newDealContactId=${contact.id}`} />}
               >
-                <Briefcase className="h-3.5 w-3.5" />
                 {tSidebar("createDeal")}
               </Button>
             </div>
+
+            <div className="mt-3.5 space-y-1 border-t border-border pt-3.5">
+              <button
+                onClick={handleCopyPhone}
+                className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+              >
+                <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="flex-1 text-left">{contact.phone}</span>
+                {copied ? (
+                  <Check className="h-3 w-3 text-primary" />
+                ) : (
+                  <Copy className="h-3 w-3 text-muted-foreground" />
+                )}
+              </button>
+
+              {contact.email && (
+                <div className="flex items-center gap-2 rounded-lg px-1 py-1 text-xs text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="truncate">{contact.email}</span>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Phone */}
-          <div className="mt-4 space-y-2">
-            <button
-              onClick={handleCopyPhone}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
-            >
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <span className="flex-1 text-left">{contact.phone}</span>
-              {copied ? (
-                <Check className="h-3 w-3 text-primary" />
-              ) : (
-                <Copy className="h-3 w-3 text-muted-foreground" />
-              )}
-            </button>
-
-            {contact.email && (
-              <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <span className="truncate">{contact.email}</span>
+          {/* Card B — tags / deals / notes */}
+          <div className="shrink-0 rounded-2xl bg-card p-[18px] shadow-[var(--shadow)]">
+            {/* Tags */}
+            <div>
+              <div className="flex items-center gap-2 text-[13.5px] font-bold text-foreground">
+                <TagIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                {tSidebar("tags")}
               </div>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="my-4 border-t border-border" />
-
-          {/* Tags */}
-          <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <TagIcon className="h-3 w-3" />
-              {tSidebar("tags")}
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {tags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{tSidebar("noTags")}</p>
+                ) : (
+                  tags.map((tag) => (
+                    <span
+                      key={tag.contact_tag_id}
+                      className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                      style={{
+                        backgroundColor: `${tag.color}20`,
+                        color: tag.color,
+                      }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))
+                )}
+              </div>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {tags.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">{tSidebar("noTags")}</p>
-              ) : (
-                tags.map((tag) => (
-                  <span
-                    key={tag.contact_tag_id}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      backgroundColor: `${tag.color}20`,
-                      color: tag.color,
-                    }}
-                  >
-                    {tag.name}
-                  </span>
-                ))
-              )}
-            </div>
-          </div>
 
-          {/* Divider */}
-          <div className="my-4 border-t border-border" />
-
-          {/* Active Deals */}
-          <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <DollarSign className="h-3 w-3" />
-              {tSidebar("deals")}
-            </div>
-            <div className="mt-2 space-y-2">
-              {deals.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">{tSidebar("noDeals")}</p>
-              ) : (
-                deals.map((deal) => (
-                  <div
-                    key={deal.id}
-                    className="rounded-lg bg-muted px-3 py-2"
-                  >
-                    <p className="text-sm font-medium text-foreground">
-                      {deal.title}
-                    </p>
-                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        {deal.currency ?? "$"}
-                        {deal.value.toLocaleString()}
-                      </span>
-                      {deal.stage && (
-                        <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px]"
-                          style={{
-                            backgroundColor: `${deal.stage.color}20`,
-                            color: deal.stage.color,
-                          }}
-                        >
-                          {deal.stage.name}
+            {/* Deals */}
+            <div className="mt-4.5">
+              <div className="flex items-center gap-2 text-[13.5px] font-bold text-foreground">
+                <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+                {tSidebar("deals")}
+              </div>
+              <div className="mt-2.5 space-y-2">
+                {deals.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{tSidebar("noDeals")}</p>
+                ) : (
+                  deals.map((deal) => (
+                    <div key={deal.id} className="rounded-xl bg-card-2 px-3.5 py-3">
+                      <p className="text-[13px] font-semibold text-foreground">
+                        {deal.title}
+                      </p>
+                      <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>
+                          {deal.currency ?? "$"}
+                          {deal.value.toLocaleString()}
                         </span>
-                      )}
+                        {deal.stage && (
+                          <span
+                            className="rounded-full px-1.5 py-0.5 text-[10px]"
+                            style={{
+                              backgroundColor: `${deal.stage.color}20`,
+                              color: deal.stage.color,
+                            }}
+                          >
+                            {deal.stage.name}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div className="my-4 border-t border-border" />
-
-          {/* Notes */}
-          <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <StickyNote className="h-3 w-3" />
-              {tSidebar("notes")}
-            </div>
-            <div className="mt-2">
-              <div className="flex gap-2">
-                <textarea
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  placeholder={tSidebar("addNotePlaceholder")}
-                  rows={2}
-                  className="flex-1 resize-none rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
-                />
-                <Button
-                  size="sm"
-                  className="h-auto bg-primary px-2 hover:bg-primary/90"
-                  onClick={handleAddNote}
-                  disabled={!newNote.trim() || addingNote}
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
+                  ))
+                )}
               </div>
+            </div>
 
-              <div className="mt-2 space-y-2">
-                {notes.map((note) => (
-                  <div
-                    key={note.id}
-                    className="rounded-lg bg-muted px-3 py-2"
+            {/* Notes */}
+            <div className="mt-4.5">
+              <div className="flex items-center gap-2 text-[13.5px] font-bold text-foreground">
+                <StickyNote className="h-3.5 w-3.5 text-muted-foreground" />
+                {tSidebar("notes")}
+              </div>
+              <div className="mt-2.5">
+                <div className="flex gap-2">
+                  <textarea
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    placeholder={tSidebar("addNotePlaceholder")}
+                    rows={2}
+                    className="flex-1 resize-none rounded-xl border border-hairline bg-card-2 px-3 py-2 text-xs text-foreground placeholder-muted-foreground outline-none focus:border-primary/50"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-auto bg-primary px-2 hover:bg-primary/90"
+                    onClick={handleAddNote}
+                    disabled={!newNote.trim() || addingNote}
                   >
-                    <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-                      {note.note_text}
-                    </p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
-                      {format(new Date(note.created_at), "MMM d, yyyy HH:mm")}
-                    </p>
-                  </div>
-                ))}
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+
+                <div className="mt-2 space-y-2">
+                  {notes.map((note) => (
+                    <div key={note.id} className="rounded-xl bg-card-2 px-3.5 py-3">
+                      <p className="whitespace-pre-wrap text-xs text-muted-foreground">
+                        {note.note_text}
+                      </p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        {format(new Date(note.created_at), "MMM d, yyyy HH:mm")}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
