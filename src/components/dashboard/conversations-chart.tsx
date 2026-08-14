@@ -49,8 +49,8 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
   }, [data])
 
   return (
-    <section className="flex h-full flex-col rounded-2xl border border-border bg-card shadow-[var(--shadow)]">
-      <header className="flex items-center justify-between border-b border-border px-5 py-4">
+    <section className="flex h-full flex-col rounded-2xl bg-card shadow-[var(--shadow)]">
+      <header className="flex items-center justify-between px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">{t('description')}</p>
@@ -88,7 +88,7 @@ export function ConversationsChart({ series, loading, range, onRangeChange }: Co
         )}
       </div>
 
-      <footer className="flex items-center gap-4 border-t border-border px-5 py-3 text-xs text-muted-foreground">
+      <footer className="flex items-center gap-4 rounded-b-2xl bg-card-2 px-5 py-3 text-xs text-muted-foreground">
         <LegendDot color="#3b82f6" label={t('incoming')} />
         <LegendDot color="#7c3aed" label={t('outgoing')} />
       </footer>
