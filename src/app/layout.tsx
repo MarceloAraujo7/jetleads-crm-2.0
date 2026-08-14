@@ -22,10 +22,10 @@ const mulish = Mulish({
 
 export const metadata: Metadata = {
   title: {
-    default: "wacrm",
-    template: "%s — wacrm",
+    default: "Jetleads Prospect",
+    template: "%s — Jetleads Prospect",
   },
-  description: "Self-hostable CRM template for WhatsApp.",
+  description: "CRM para WhatsApp da Jetleads Prospect.",
   robots: {
     index: false,
     follow: false,
