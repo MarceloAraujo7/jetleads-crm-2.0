@@ -412,10 +412,40 @@ export function Step3Personalize({
           )}
         </div>
         <div className="rounded-lg bg-[#0e1a12] p-3">
-          <div className="ml-auto max-w-[85%] rounded-lg bg-primary/30 px-3 py-2 shadow-sm">
-            <p className="whitespace-pre-wrap text-sm text-primary">
-              {previewText}
-            </p>
+          <div className="ml-auto max-w-[85%] overflow-hidden rounded-lg bg-primary/30 shadow-sm">
+            {mediaHeaderType === 'image' && headerMediaUrl && !headerMediaError && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={headerMediaUrl}
+                alt=""
+                className="max-h-48 w-full object-cover"
+              />
+            )}
+            <div className="px-3 py-2">
+              <p className="whitespace-pre-wrap text-sm text-primary">
+                {previewText}
+              </p>
+              {template.footer_text && (
+                <p className="mt-1 text-xs text-primary/70">
+                  {template.footer_text}
+                </p>
+              )}
+            </div>
+            {template.buttons && template.buttons.length > 0 && (
+              <div className="border-t border-primary/20">
+                {template.buttons.map((btn, i) => (
+                  <div
+                    key={i}
+                    className="border-t border-primary/20 px-3 py-2 text-center text-sm font-medium text-primary first:border-t-0"
+                  >
+                    {btn.type === 'URL' && '🔗 '}
+                    {btn.type === 'PHONE_NUMBER' && '📞 '}
+                    {btn.type === 'COPY_CODE' && '📋 '}
+                    {btn.text}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
