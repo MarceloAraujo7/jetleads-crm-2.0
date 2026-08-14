@@ -661,3 +661,69 @@ export interface QuickReply {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================
+// Campaigns — a named grouping of existing broadcast/automation/
+// flow/agent actions running in parallel for one audience. The
+// campaign doesn't execute anything itself; each action still runs
+// (and is tracked) by its own module.
+// ============================================================
+
+export type CampaignStatus = 'running' | 'scheduled' | 'completed';
+export type CampaignActionType = 'broadcast' | 'automation' | 'flow' | 'agent';
+
+export interface Campaign {
+  id: string;
+  account_id: string;
+  name: string;
+  audience_label?: string | null;
+  audience_count?: number | null;
+  status: CampaignStatus;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignAction {
+  id: string;
+  campaign_id: string;
+  action_type: CampaignActionType;
+  /** Campaign-local title — denormalized because `ai_configs` (the
+   *  'agent' link target) is one row per account, not a nameable
+   *  entity, so every action needs its own display title regardless
+   *  of type. */
+  title: string;
+  broadcast_id?: string | null;
+  automation_id?: string | null;
+  flow_id?: string | null;
+  ai_config_id?: string | null;
+  position: number;
+  created_at: string;
+}
+
+/** Raw status key computed from the linked entity — translated by the
+ *  UI via `Campaigns.actionStatus.<statusKey>`, never rendered as-is. */
+export type CampaignActionStatusKey =
+  | 'broadcastDraft'
+  | 'broadcastScheduled'
+  | 'broadcastSending'
+  | 'broadcastSent'
+  | 'broadcastFailed'
+  | 'automationActive'
+  | 'automationPaused'
+  | 'flowPublished'
+  | 'flowDraft'
+  | 'flowArchived'
+  | 'agentActive'
+  | 'agentInactive'
+  | 'linkRemoved';
+
+/** A campaign action enriched with the live status/progress computed
+ *  from its linked entity — what the Campanhas page actually renders. */
+export interface CampaignActionWithProgress extends CampaignAction {
+  statusKey: CampaignActionStatusKey;
+  /** 0-100. `null` when the linked entity has no meaningful progress
+   *  yet (e.g. a flow with zero runs). */
+  progressPercent: number | null;
+  subtitle?: string;
+}
