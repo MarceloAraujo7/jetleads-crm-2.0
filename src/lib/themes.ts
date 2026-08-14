@@ -105,3 +105,49 @@ export function isThemeId(value: unknown): value is ThemeId {
     (THEME_IDS as ReadonlyArray<string>).includes(value)
   );
 }
+
+/**
+ * SIDEBAR STYLE — a third, orthogonal preference (labels / icons-only /
+ * grouped-by-section). Unlike mode/theme this never needs a no-flash
+ * boot script: the sidebar only ever mounts client-side (after
+ * DashboardShell's auth-loading gate), well after localStorage is
+ * readable, so there's no server-rendered HTML to correct pre-hydration.
+ */
+export const SIDEBAR_STYLES = ["labels", "icons", "grouped"] as const;
+
+export type SidebarStyle = (typeof SIDEBAR_STYLES)[number];
+
+export const DEFAULT_SIDEBAR_STYLE: SidebarStyle = "labels";
+
+export const SIDEBAR_STYLE_STORAGE_KEY = "wacrm.sidebarStyle";
+
+export function isSidebarStyle(value: unknown): value is SidebarStyle {
+  return (
+    typeof value === "string" &&
+    (SIDEBAR_STYLES as ReadonlyArray<string>).includes(value)
+  );
+}
+
+export interface SidebarStyleMeta {
+  id: SidebarStyle;
+  name: string;
+  tagline: string;
+}
+
+export const SIDEBAR_STYLE_OPTIONS: ReadonlyArray<SidebarStyleMeta> = [
+  {
+    id: "labels",
+    name: "Labels",
+    tagline: "Full-width nav with icon and text — the default.",
+  },
+  {
+    id: "icons",
+    name: "Icons only",
+    tagline: "Narrow rail, icons with hover tooltips.",
+  },
+  {
+    id: "grouped",
+    name: "Grouped",
+    tagline: "Full-width nav split into Operations and Growth sections.",
+  },
+];

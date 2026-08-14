@@ -1,9 +1,25 @@
 "use client";
 
-import { Check, Moon, Palette, SunMoon, Sun } from "lucide-react";
+import {
+  Check,
+  LayoutList,
+  Moon,
+  PanelLeft,
+  PanelLeftClose,
+  Palette,
+  SunMoon,
+  Sun,
+} from "lucide-react";
 
 import { useTheme } from "@/hooks/use-theme";
-import { MODES, THEMES, type Mode, type ThemeId } from "@/lib/themes";
+import {
+  MODES,
+  SIDEBAR_STYLE_OPTIONS,
+  THEMES,
+  type Mode,
+  type SidebarStyle,
+  type ThemeId,
+} from "@/lib/themes";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import { SettingsPanelHead } from "./settings-panel-head";
@@ -21,7 +37,8 @@ import { SettingsPanelHead } from "./settings-panel-head";
  * loads.
  */
 export function AppearancePanel() {
-  const { theme, setTheme, mode, setMode } = useTheme();
+  const { theme, setTheme, mode, setMode, sidebarStyle, setSidebarStyle } =
+    useTheme();
   const t = useTranslations("Settings.appearance");
 
   return (
@@ -73,7 +90,90 @@ export function AppearancePanel() {
           ))}
         </div>
       </div>
+
+      <div className="mt-8 space-y-4">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <LayoutList className="size-4 text-muted-foreground" />
+          {t("sidebarStyle")}
+        </h3>
+
+        <div
+          role="radiogroup"
+          aria-label="Sidebar style"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+        >
+          {SIDEBAR_STYLE_OPTIONS.map((s) => (
+            <SidebarStyleCard
+              key={s.id}
+              id={s.id}
+              name={s.name}
+              tagline={s.tagline}
+              isActive={s.id === sidebarStyle}
+              onPick={() => setSidebarStyle(s.id)}
+            />
+          ))}
+        </div>
+      </div>
     </section>
+  );
+}
+
+const SIDEBAR_STYLE_ICON: Record<SidebarStyle, typeof PanelLeft> = {
+  labels: PanelLeft,
+  icons: PanelLeftClose,
+  grouped: LayoutList,
+};
+
+function SidebarStyleCard({
+  id,
+  name,
+  tagline,
+  isActive,
+  onPick,
+}: {
+  id: SidebarStyle;
+  name: string;
+  tagline: string;
+  isActive: boolean;
+  onPick: () => void;
+}) {
+  const t = useTranslations("Settings.appearance");
+  const Icon = SIDEBAR_STYLE_ICON[id];
+  return (
+    <button
+      type="button"
+      role="radio"
+      onClick={onPick}
+      aria-checked={isActive}
+      aria-label={t("useSidebarStyle", { style: name })}
+      className={cn(
+        "flex flex-col gap-3 rounded-lg border bg-card p-4 text-left transition-colors",
+        isActive
+          ? "border-primary/60 ring-2 ring-primary/40"
+          : "border-border hover:border-border hover:bg-muted/40",
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <span
+          aria-hidden
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground"
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        {isActive && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+            <Check className="h-3 w-3" />
+            {t("active")}
+          </span>
+        )}
+      </div>
+      <div>
+        <div className="text-sm font-semibold text-foreground">{name}</div>
+        <div className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          {tagline}
+        </div>
+      </div>
+    </button>
   );
 }
 

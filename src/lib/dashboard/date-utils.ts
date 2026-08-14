@@ -15,6 +15,14 @@ export function daysAgoStart(days: number): Date {
   return out
 }
 
+/** Local midnight on the 1st of the month, `monthsAgo` months back. */
+export function startOfMonth(monthsAgo = 0): Date {
+  const out = startOfLocalDay()
+  out.setDate(1)
+  out.setMonth(out.getMonth() - monthsAgo)
+  return out
+}
+
 /** Date-only key (YYYY-MM-DD) for bucketing rows by local calendar day. */
 export function localDayKey(d: Date | string): string {
   const date = typeof d === 'string' ? new Date(d) : d

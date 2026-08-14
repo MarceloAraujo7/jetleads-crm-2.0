@@ -11,12 +11,16 @@ import {
 
 import {
   DEFAULT_MODE,
+  DEFAULT_SIDEBAR_STYLE,
   DEFAULT_THEME,
   MODE_STORAGE_KEY,
+  SIDEBAR_STYLE_STORAGE_KEY,
   STORAGE_KEY,
   isMode,
+  isSidebarStyle,
   isThemeId,
   type Mode,
+  type SidebarStyle,
   type ThemeId,
 } from "@/lib/themes";
 
@@ -43,6 +47,8 @@ interface ThemeContextValue {
   mode: Mode;
   setMode: (next: Mode) => void;
   toggleMode: () => void;
+  sidebarStyle: SidebarStyle;
+  setSidebarStyle: (next: SidebarStyle) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -76,9 +82,27 @@ function readInitialMode(): Mode {
   return DEFAULT_MODE;
 }
 
+function readInitialSidebarStyle(): SidebarStyle {
+  if (typeof window === "undefined") return DEFAULT_SIDEBAR_STYLE;
+  // No boot script for this one — the sidebar only ever mounts
+  // client-side, after localStorage is already readable, so there's
+  // no pre-hydration flash to correct (see the ThemeProvider doc
+  // comment above for why mode/theme need one and this doesn't).
+  try {
+    const stored = localStorage.getItem(SIDEBAR_STYLE_STORAGE_KEY);
+    if (isSidebarStyle(stored)) return stored;
+  } catch {
+    // localStorage can throw in private-browsing / sandboxed contexts.
+  }
+  return DEFAULT_SIDEBAR_STYLE;
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeId>(readInitialTheme);
   const [mode, setModeState] = useState<Mode>(readInitialMode);
+  const [sidebarStyle, setSidebarStyleState] = useState<SidebarStyle>(
+    readInitialSidebarStyle,
+  );
 
   const setTheme = useCallback((next: ThemeId) => {
     setThemeState(next);
@@ -109,6 +133,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setMode(mode === "dark" ? "light" : "dark");
   }, [mode, setMode]);
 
+  const setSidebarStyle = useCallback((next: SidebarStyle) => {
+    setSidebarStyleState(next);
+    try {
+      localStorage.setItem(SIDEBAR_STYLE_STORAGE_KEY, next);
+    } catch {
+      // Same private-browsing edge case as above.
+    }
+  }, []);
+
   // Sync from other tabs — change theme or mode in tab A, tab B
   // catches up without a refresh.
   useEffect(() => {
@@ -125,14 +158,22 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           setModeState(e.newValue);
           document.documentElement.dataset.mode = e.newValue;
         }
+        return;
+      }
+      if (e.key === SIDEBAR_STYLE_STORAGE_KEY) {
+        if (isSidebarStyle(e.newValue) && e.newValue !== sidebarStyle) {
+          setSidebarStyleState(e.newValue);
+        }
       }
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, [theme, mode]);
+  }, [theme, mode, sidebarStyle]);
 
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, mode, setMode, toggleMode }}>
+    <ThemeContext.Provider
+      value={{ theme, setTheme, mode, setMode, toggleMode, sidebarStyle, setSidebarStyle }}
+    >
       {children}
     </ThemeContext.Provider>
   );
@@ -150,6 +191,8 @@ export function useTheme(): ThemeContextValue {
       mode: DEFAULT_MODE,
       setMode: () => {},
       toggleMode: () => {},
+      sidebarStyle: DEFAULT_SIDEBAR_STYLE,
+      setSidebarStyle: () => {},
     };
   }
   return ctx;

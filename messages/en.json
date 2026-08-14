@@ -40,7 +40,9 @@
     "menuSettings": "Settings",
     "menuSignOut": "Sign out",
     "whatsapp": "WhatsApp",
-    "team": "Team"
+    "team": "Team",
+    "groupOperations": "Operations",
+    "groupGrowth": "Growth"
   },
   "Header": {
     "dashboard": "Dashboard",
@@ -78,7 +80,9 @@
       "noChange": "No change {suffix}",
       "invitesSent": "Invites sent",
       "invitesConfirmed": "Confirmed",
-      "invitesConfirmedSubtitle": "{rate}% confirmation rate"
+      "invitesConfirmedSubtitle": "{rate}% confirmation rate",
+      "conversionsGoal": "Conversions this month",
+      "conversionsGoalSubtitle": "{current} of {goal} deals won"
     },
     "quickActions": {
       "newContact": "New Contact",
@@ -1630,7 +1634,9 @@
       "useMode": "Use {mode} mode",
       "active": "Active",
       "accentColor": "Accent color",
-      "useTheme": "Use {name} theme"
+      "useTheme": "Use {name} theme",
+      "sidebarStyle": "Sidebar style",
+      "useSidebarStyle": "Use {style} sidebar"
     },
     "security": {
       "title": "Login & security",

@@ -16,6 +16,7 @@ import {
 import {
   loadActivity,
   loadConversationsSeries,
+  loadConversionsGoal,
   loadMetrics,
   loadPipelineDonut,
   loadResponseTime,
@@ -23,12 +24,14 @@ import {
 import type {
   ActivityItem,
   ConversationsSeriesPoint,
+  ConversionsGoal,
   MetricsBundle,
   PipelineDonutData,
   ResponseTimeSummary,
 } from '@/lib/dashboard/types'
 
 import { MetricCard } from '@/components/dashboard/metric-card'
+import { GoalProgressCard } from '@/components/dashboard/goal-progress-card'
 import { SkeletonCard } from '@/components/dashboard/skeleton'
 import { QuickActions } from '@/components/dashboard/quick-actions'
 import { ConversationsChart } from '@/components/dashboard/conversations-chart'
@@ -45,6 +48,9 @@ export default function DashboardPage() {
   const { defaultCurrency } = useAuth()
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
+
+  const [conversionsGoal, setConversionsGoal] = useState<ConversionsGoal | null>(null)
+  const [conversionsGoalLoading, setConversionsGoalLoading] = useState(true)
 
   const [range, setRange] = useState<RangeDays>(30)
   // Keep a cache per range so switching tabs doesn't re-fetch what we
@@ -76,6 +82,11 @@ export default function DashboardPage() {
       .then((m) => setMetrics(m))
       .catch((err) => console.error('[dashboard] metrics failed:', err))
       .finally(() => setMetricsLoading(false))
+
+    void loadConversionsGoal(db)
+      .then((g) => setConversionsGoal(g))
+      .catch((err) => console.error('[dashboard] conversions goal failed:', err))
+      .finally(() => setConversionsGoalLoading(false))
 
     void loadConversationsSeries(db, 30)
       .then((s) => setSeries((prev) => ({ ...prev, 30: s })))
@@ -187,6 +198,19 @@ export default function DashboardPage() {
               }}
             />
           </>
+        )}
+        {conversionsGoalLoading || !conversionsGoal ? (
+          <SkeletonCard />
+        ) : (
+          <GoalProgressCard
+            label={t('conversionsGoal')}
+            current={conversionsGoal.current}
+            goal={conversionsGoal.goal}
+            subtitle={t('conversionsGoalSubtitle', {
+              current: conversionsGoal.current,
+              goal: conversionsGoal.goal,
+            })}
+          />
         )}
       </div>
 

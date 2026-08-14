@@ -40,7 +40,9 @@
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
     "whatsapp": "WhatsApp",
-    "team": "Equipe"
+    "team": "Equipe",
+    "groupOperations": "Operação",
+    "groupGrowth": "Crescimento"
   },
   "Header": {
     "dashboard": "Painel",
@@ -78,7 +80,9 @@
       "noChange": "Sem alteração {suffix}",
       "invitesSent": "Convites enviados",
       "invitesConfirmed": "Confirmados",
-      "invitesConfirmedSubtitle": "{rate}% de confirmação"
+      "invitesConfirmedSubtitle": "{rate}% de confirmação",
+      "conversionsGoal": "Conversões do mês",
+      "conversionsGoalSubtitle": "{current} de {goal} negócios fechados"
     },
     "quickActions": {
       "newContact": "Novo contato",
@@ -1630,7 +1634,9 @@
       "useMode": "Usar modo {mode}",
       "active": "Ativo",
       "accentColor": "Cor de destaque",
-      "useTheme": "Usar tema {name}"
+      "useTheme": "Usar tema {name}",
+      "sidebarStyle": "Estilo da sidebar",
+      "useSidebarStyle": "Usar sidebar {style}"
     },
     "security": {
       "title": "Login e segurança",

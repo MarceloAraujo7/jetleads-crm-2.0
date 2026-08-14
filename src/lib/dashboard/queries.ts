@@ -6,10 +6,12 @@ import {
   localDayKey,
   mondayIndex,
   startOfLocalDay,
+  startOfMonth,
 } from './date-utils'
 import type {
   ActivityItem,
   ConversationsSeriesPoint,
+  ConversionsGoal,
   MetricsBundle,
   PipelineDonutData,
   PipelineStageSlice,
@@ -111,6 +113,41 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     },
     invitesSent,
     invitesConfirmed: confirmedRsvps.count ?? 0,
+  }
+}
+
+// --- 1b. Conversions goal card ------------------------------------------
+
+/**
+ * Deals won this month vs. a "beat last month" goal. There's no
+ * `deals.won_at` column, so "this month" approximates via `updated_at`
+ * on a `status='won'` row — a won deal is rarely touched again, so
+ * this is close enough without a schema change. The goal has no
+ * account-configurable target yet, so it's derived from the account's
+ * own history (last full month's won count) rather than a hardcoded
+ * constant that would be misleading across tenants.
+ */
+export async function loadConversionsGoal(db: DB): Promise<ConversionsGoal> {
+  const thisMonthStart = startOfMonth(0).toISOString()
+  const lastMonthStart = startOfMonth(1).toISOString()
+
+  const [thisMonthWon, lastMonthWon] = await Promise.all([
+    db
+      .from('deals')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'won')
+      .gte('updated_at', thisMonthStart),
+    db
+      .from('deals')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'won')
+      .gte('updated_at', lastMonthStart)
+      .lt('updated_at', thisMonthStart),
+  ])
+
+  return {
+    current: thisMonthWon.count ?? 0,
+    goal: Math.max(lastMonthWon.count ?? 0, 1),
   }
 }
 

@@ -19,6 +19,13 @@ export interface MetricsBundle {
   invitesConfirmed: number
 }
 
+export interface ConversionsGoal {
+  /** Deals marked `won` since the start of the current month. */
+  current: number
+  /** Deals marked `won` in the full previous month (min 1, "beat last month"). */
+  goal: number
+}
+
 export interface ConversationsSeriesPoint {
   day: string // YYYY-MM-DD local
   incoming: number
