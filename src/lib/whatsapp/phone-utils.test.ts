@@ -6,7 +6,36 @@ import {
   phoneVariants,
   phonesMatch,
   sanitizePhoneForMeta,
+  withBrazilCountryCode,
 } from "./phone-utils";
+
+describe("withBrazilCountryCode", () => {
+  it("prepends 55 to a bare 11-digit DDD+mobile number", () => {
+    expect(withBrazilCountryCode("81982169570")).toBe("5581982169570");
+  });
+
+  it("prepends 55 to a bare 10-digit DDD+landline number", () => {
+    expect(withBrazilCountryCode("8396665150")).toBe("558396665150");
+  });
+
+  it("strips formatting before checking length", () => {
+    expect(withBrazilCountryCode("(81) 98216-9570")).toBe("5581982169570");
+  });
+
+  it("leaves a number that already has a country code untouched", () => {
+    expect(withBrazilCountryCode("5581982169570")).toBe("5581982169570");
+  });
+
+  it("never guesses a country code when the input has an explicit +", () => {
+    // 11 digits after the country code — same length as a bare BR
+    // number, but the + says "this is already complete, don't touch it".
+    expect(withBrazilCountryCode("+15551234567")).toBe("15551234567");
+  });
+
+  it("returns an empty string for falsy input", () => {
+    expect(withBrazilCountryCode("")).toBe("");
+  });
+});
 
 describe("sanitizePhoneForMeta", () => {
   it("strips +, spaces, and dashes leaving only digits", () => {

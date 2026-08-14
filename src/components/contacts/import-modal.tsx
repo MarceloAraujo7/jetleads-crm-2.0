@@ -43,17 +43,42 @@ import { useTranslations } from 'next-intl';
 const DEFAULT_TAG_COLOR = '#3b82f6';
 const PREVIEW_LIMIT = 5;
 
+// No country code on the example number — the parser adds Brazil's
+// 55 automatically for a bare DDD+number, which is how contact lists
+// actually show up in the wild (see parseContactCsv/withBrazilCountryCode).
 const CSV_TEMPLATE_CONTENT =
-  'phone,name,email,company,tags\n+5511999999999,João Silva,joao@example.com,Empresa X,vip;feirao\n';
+  'nome,telefone,email,empresa,tags\nJoão Silva,11999999999,joao@example.com,Empresa X,vip;feirao\n';
 
 function downloadCsvTemplate() {
-  const blob = new Blob([CSV_TEMPLATE_CONTENT], { type: 'text/csv;charset=utf-8;' });
+  // Leading BOM so Excel — still the most common place this template
+  // gets filled in — detects UTF-8 instead of guessing ANSI and
+  // mangling "João" back into mojibake when reopened.
+  const BOM = String.fromCharCode(0xfeff);
+  const blob = new Blob([BOM + CSV_TEMPLATE_CONTENT], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   a.download = 'modelo-importacao-contatos.csv';
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Reads a CSV file as text, correcting for non-UTF-8 encodings.
+ * Spreadsheet exports from Portuguese-locale Excel are commonly saved
+ * as Windows-1252 (a superset of Latin-1), not UTF-8 — reading those
+ * as UTF-8 mangles every accented character ("José" → "Jos�"). A
+ * byte sequence that isn't valid UTF-8 decodes with U+FFFD
+ * replacement characters, which is the tell; re-decode as
+ * Windows-1252 when that shows up.
+ */
+async function readCsvFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const utf8 = new TextDecoder('utf-8').decode(buffer);
+  if (utf8.includes('�')) {
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
+  return utf8;
 }
 
 function truncateFilename(name: string, max = 48): string {
@@ -182,7 +207,7 @@ export function ImportModal({
     setFile(selected);
     setResult(null);
 
-    const text = await selected.text();
+    const text = await readCsvFile(selected);
     const {
       rows,
       hasTagsColumn: csvHasTags,

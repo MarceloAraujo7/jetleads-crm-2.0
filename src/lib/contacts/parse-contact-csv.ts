@@ -1,7 +1,34 @@
+import { withBrazilCountryCode } from '@/lib/whatsapp/phone-utils';
+
 /**
  * CSV parsing for the contacts import modal. Shared + unit-tested so
  * tag-column handling stays aligned with phone/name/email/company.
  */
+
+/**
+ * Header aliases per field, EN + PT-BR — real-world exports (a phone
+ * shop's own client list, a spreadsheet someone built by hand) show up
+ * with Portuguese headers ("Telefone", "Nome") far more often than the
+ * English ones the original template used, and there's no reason to
+ * reject a file just because its header is in the account's own
+ * language. Matched case-insensitively after the header row is
+ * lowercased below, so list the aliases in lowercase.
+ */
+const FIELD_ALIASES = {
+  phone: ['phone', 'telefone', 'celular', 'whatsapp'],
+  name: ['name', 'nome'],
+  email: ['email', 'e-mail'],
+  company: ['company', 'empresa'],
+  tags: ['tags', 'etiquetas'],
+} as const;
+
+function findColumn(headers: string[], aliases: readonly string[]): number {
+  for (const alias of aliases) {
+    const idx = headers.indexOf(alias);
+    if (idx !== -1) return idx;
+  }
+  return -1;
+}
 
 export interface ParsedContactRow {
   phone: string;
@@ -49,15 +76,15 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
     .split(',')
     .map((h) => h.trim().toLowerCase().replace(/["']/g, ''));
 
-  const phoneIdx = headers.indexOf('phone');
+  const phoneIdx = findColumn(headers, FIELD_ALIASES.phone);
   if (phoneIdx === -1) {
     return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
   }
 
-  const nameIdx = headers.indexOf('name');
-  const emailIdx = headers.indexOf('email');
-  const companyIdx = headers.indexOf('company');
-  const tagsIdx = headers.indexOf('tags');
+  const nameIdx = findColumn(headers, FIELD_ALIASES.name);
+  const emailIdx = findColumn(headers, FIELD_ALIASES.email);
+  const companyIdx = findColumn(headers, FIELD_ALIASES.company);
+  const tagsIdx = findColumn(headers, FIELD_ALIASES.tags);
 
   const rows: ParsedContactRow[] = [];
 
@@ -66,8 +93,15 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
     if (!line) continue;
 
     const values = parseCsvLine(line);
-    const phone = values[phoneIdx]?.replace(/["']/g, '').trim();
-    if (!phone) continue;
+    const rawPhone = values[phoneIdx]?.replace(/["']/g, '').trim();
+    if (!rawPhone) continue;
+    // Digits-only from here down (matches how the manual contact form
+    // and the WhatsApp webhook already store phone). Spreadsheet
+    // exports rarely carry a country code — a bare "81982169570" gets
+    // the 55 prefix so it's actually usable for WhatsApp; anything
+    // that already has a country code, or an explicit +, is left as
+    // just its digits.
+    const phone = withBrazilCountryCode(rawPhone);
 
     rows.push({
       phone,

@@ -18,6 +18,27 @@ export function normalizePhone(phone: string): string {
 }
 
 /**
+ * Prepend Brazil's country code (55) to a bare local-format number
+ * that's missing it. Spreadsheet exports (contact lists, CSV imports)
+ * almost always carry just DDD+number with no country code — Meta's
+ * API needs the full number to route the message.
+ *
+ * Only triggers when the input has no `+` prefix (an explicit `+`
+ * means the caller already gave a complete international number, in
+ * any country — never touched) AND the stripped digits are exactly
+ * 10 or 11 long, the unambiguous shape of a bare BR local number
+ * (2-digit DDD + 8-digit landline or 9-digit mobile). Anything else
+ * — already has a country code, or doesn't look like a phone number
+ * at all — passes through unchanged.
+ */
+export function withBrazilCountryCode(phone: string): string {
+  if (!phone || phone.trim().startsWith('+')) return normalizePhone(phone)
+  const digits = normalizePhone(phone)
+  if (digits.length === 10 || digits.length === 11) return '55' + digits
+  return digits
+}
+
+/**
  * Compare two phone numbers accounting for trunk prefix differences.
  * e.g. "370063949836" (with trunk 0) matches "37063949836" (without trunk 0)
  * by comparing the last 8 digits.

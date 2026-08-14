@@ -428,7 +428,7 @@
     },
     "importModal": {
       "title": "Importar contatos",
-      "desc": "Envie um CSV com uma coluna <phoneCode>phone</phoneCode> obrigatória. Opcional: <nameCode>name</nameCode>, <emailCode>email</emailCode>, <companyCode>company</companyCode>, <tagsCode>tags</tagsCode> (separadas por vírgula; use aspas em células com múltiplas tags).",
+      "desc": "Envie um CSV com uma coluna <phoneCode>telefone</phoneCode> obrigatória (sem DDI — adicionamos o 55 automaticamente). Opcional: <nameCode>nome</nameCode>, <emailCode>email</emailCode>, <companyCode>empresa</companyCode>, <tagsCode>tags</tagsCode> (separadas por vírgula; use aspas em células com múltiplas tags).",
       "uploadDropzone": "Clique para escolher um arquivo CSV",
       "uploadHint": ".csv até o limite do seu navegador",
       "rowsReady": "{count} linha pronta",
@@ -456,7 +456,7 @@
       "close": "Fechar",
       "importBtn": "Importar {count} contato",
       "importBtn_plural": "Importar {count} contatos",
-      "toastNoValidRows": "Nenhuma linha válida encontrada. Verifique se o CSV tem uma coluna \"phone\".",
+      "toastNoValidRows": "Nenhuma linha válida encontrada. Verifique se o CSV tem uma coluna \"telefone\" (ou \"phone\").",
       "toastTagsWarning": "Contatos importados, mas algumas atribuições de tags falharam.",
       "toastImported": "{count} contato importado",
       "toastImported_plural": "{count} contatos importados",
