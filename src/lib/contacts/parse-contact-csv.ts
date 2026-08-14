@@ -30,6 +30,32 @@ function findColumn(headers: string[], aliases: readonly string[]): number {
   return -1;
 }
 
+/**
+ * Excel saved under a PT-BR (or most other European) locale exports
+ * CSV with `;` as the field separator, not `,` — because `,` is
+ * already the decimal separator in that locale. Detected from the
+ * header row: whichever character splits it into more fields wins.
+ * Falls back to `,` when the row has neither (single-column files,
+ * or truly comma-delimited ones).
+ */
+function detectDelimiter(headerLine: string): ',' | ';' {
+  const commas = (headerLine.match(/,/g) ?? []).length;
+  const semicolons = (headerLine.match(/;/g) ?? []).length;
+  return semicolons > commas ? ';' : ',';
+}
+
+/**
+ * A phone cell that survived a round-trip through Excel as a number
+ * column: "81982169570" gets auto-typed as a number, then rendered in
+ * scientific notation ("5,58E+12" or "5.58E+12") once it's wider than
+ * Excel's default column width. The original digits are gone by the
+ * time we see the file — there's nothing to recover, only to detect
+ * and report clearly instead of silently importing 5-6 garbage digits.
+ */
+function looksLikeExcelScientificNotation(value: string): boolean {
+  return /^\d+[.,]\d+e\+?\d+$/i.test(value.trim());
+}
+
 export interface ParsedContactRow {
   phone: string;
   name?: string;
@@ -64,21 +90,29 @@ export interface ParseContactCsvResult {
   hasTagsColumn: boolean;
   /** True when the CSV header includes a `company` column. */
   hasCompanyColumn: boolean;
+  /**
+   * Rows skipped because their phone cell was Excel scientific
+   * notation (e.g. "5,58E+12") — the original number is unrecoverable
+   * from the file itself. Surfaced so the UI can tell the user why,
+   * instead of silently importing fewer rows than expected.
+   */
+  corruptedPhoneCount: number;
 }
 
 export function parseContactCsv(text: string): ParseContactCsvResult {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) {
-    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
+    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false, corruptedPhoneCount: 0 };
   }
 
+  const delimiter = detectDelimiter(lines[0]);
   const headers = lines[0]
-    .split(',')
+    .split(delimiter)
     .map((h) => h.trim().toLowerCase().replace(/["']/g, ''));
 
   const phoneIdx = findColumn(headers, FIELD_ALIASES.phone);
   if (phoneIdx === -1) {
-    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false };
+    return { rows: [], hasTagsColumn: false, hasCompanyColumn: false, corruptedPhoneCount: 0 };
   }
 
   const nameIdx = findColumn(headers, FIELD_ALIASES.name);
@@ -87,14 +121,19 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
   const tagsIdx = findColumn(headers, FIELD_ALIASES.tags);
 
   const rows: ParsedContactRow[] = [];
+  let corruptedPhoneCount = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    const values = parseCsvLine(line);
+    const values = parseCsvLine(line, delimiter);
     const rawPhone = values[phoneIdx]?.replace(/["']/g, '').trim();
     if (!rawPhone) continue;
+    if (looksLikeExcelScientificNotation(rawPhone)) {
+      corruptedPhoneCount++;
+      continue;
+    }
     // Digits-only from here down (matches how the manual contact form
     // and the WhatsApp webhook already store phone). Spreadsheet
     // exports rarely carry a country code — a bare "81982169570" gets
@@ -126,11 +165,12 @@ export function parseContactCsv(text: string): ParseContactCsvResult {
     rows,
     hasTagsColumn: tagsIdx >= 0,
     hasCompanyColumn: companyIdx >= 0,
+    corruptedPhoneCount,
   };
 }
 
 /** Simple CSV line parse (handles quoted fields). */
-function parseCsvLine(line: string): string[] {
+function parseCsvLine(line: string, delimiter: ',' | ';' = ','): string[] {
   const values: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -138,7 +178,7 @@ function parseCsvLine(line: string): string[] {
   for (const char of line) {
     if (char === '"') {
       inQuotes = !inQuotes;
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       values.push(current.trim());
       current = '';
     } else {

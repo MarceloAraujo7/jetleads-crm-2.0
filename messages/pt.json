@@ -465,6 +465,8 @@
       "importBtn": "Importar {count} contato",
       "importBtn_plural": "Importar {count} contatos",
       "toastNoValidRows": "Nenhuma linha válida encontrada. Verifique se o CSV tem uma coluna \"telefone\" (ou \"phone\").",
+      "toastCorruptedPhones": "Os telefones desse arquivo viraram notação científica (ex: 5,58E+12) — o Excel converteu a coluna pra número e os dígitos originais se perderam. Formate a coluna telefone como Texto no Excel antes de salvar de novo, ou reexporte sem passar pelo Excel.",
+      "toastSomeCorruptedPhones": "{count} {count, plural, =1 {linha tinha um telefone} other {linhas tinham telefones}} em notação científica (o Excel converteu pra número) e {count, plural, =1 {foi ignorada} other {foram ignoradas}} — os dígitos originais se perderam. Formate a coluna telefone como Texto no Excel antes de salvar.",
       "toastTagsWarning": "Contatos importados, mas algumas atribuições de tags falharam.",
       "toastImported": "{count} contato importado",
       "toastImported_plural": "{count} contatos importados",
@@ -660,7 +662,13 @@
       },
       "errorLoad": "Falha ao carregar disparos",
       "retry": "Tentar novamente",
-      "inProgress": "{count} {count, plural, =1 {campanha} other {campanhas}} em andamento"
+      "inProgress": "{count} {count, plural, =1 {campanha} other {campanhas}} em andamento",
+      "kpi": {
+        "sent": "Enviadas",
+        "delivered": "Entregues",
+        "read": "Lidas",
+        "replied": "Respondidas"
+      }
     },
     "status": {
       "draft": "Rascunho",

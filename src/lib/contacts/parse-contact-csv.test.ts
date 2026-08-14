@@ -33,6 +33,7 @@ describe('parseContactCsv', () => {
     expect(parseContactCsv(csv)).toEqual({
       hasTagsColumn: true,
       hasCompanyColumn: false,
+      corruptedPhoneCount: 0,
       rows: [
         {
           // An explicit + means "trust this as a complete
@@ -62,6 +63,7 @@ describe('parseContactCsv', () => {
     expect(parseContactCsv(csv)).toEqual({
       hasTagsColumn: false,
       hasCompanyColumn: false,
+      corruptedPhoneCount: 0,
       rows: [
         {
           phone: '15551234567',
@@ -108,5 +110,39 @@ Ana,11988887777,Empresa X,vip`;
     expect(parseContactCsv(csv).rows).toEqual([
       { phone: '5581982169570', name: 'Carlos', email: undefined, company: undefined, tagNames: [] },
     ]);
+  });
+
+  it('detects a semicolon-delimited file (PT-BR Excel export)', () => {
+    const csv = `nome;telefone;empresa
+Maria Silva;81982169570;Empresa X`;
+
+    const result = parseContactCsv(csv);
+    expect(result.hasCompanyColumn).toBe(true);
+    expect(result.rows).toEqual([
+      { phone: '5581982169570', name: 'Maria Silva', email: undefined, company: 'Empresa X', tagNames: [] },
+    ]);
+  });
+
+  it('skips rows whose phone is Excel scientific notation and reports the count', () => {
+    const csv = `nome,telefone
+Maria Silva,"5,58E+12"
+João,8396665150`;
+
+    const result = parseContactCsv(csv);
+    expect(result.corruptedPhoneCount).toBe(1);
+    // Only the row with a real phone makes it through — the
+    // scientific-notation one is dropped, not imported as garbage.
+    expect(result.rows).toEqual([
+      { phone: '558396665150', name: 'João', email: undefined, company: undefined, tagNames: [] },
+    ]);
+  });
+
+  it('reports corruptedPhoneCount when every row is scientific notation', () => {
+    const csv = `nome,telefone
+Maria Silva,5.58E+12`;
+
+    const result = parseContactCsv(csv);
+    expect(result.rows).toEqual([]);
+    expect(result.corruptedPhoneCount).toBe(1);
   });
 });

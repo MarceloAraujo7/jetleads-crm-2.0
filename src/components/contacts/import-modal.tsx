@@ -212,15 +212,22 @@ export function ImportModal({
       rows,
       hasTagsColumn: csvHasTags,
       hasCompanyColumn: csvHasCompany,
+      corruptedPhoneCount,
     } = parseContactCsv(text);
 
     if (rows.length === 0) {
-      toast.error(t('toastNoValidRows'));
+      toast.error(
+        corruptedPhoneCount > 0 ? t('toastCorruptedPhones') : t('toastNoValidRows'),
+      );
       setParsedRows([]);
       setHasTagsColumn(false);
       setHasCompanyColumn(false);
       setTagColorByKey(new Map());
       return;
+    }
+
+    if (corruptedPhoneCount > 0) {
+      toast.warning(t('toastSomeCorruptedPhones', { count: corruptedPhoneCount }));
     }
 
     setParsedRows(rows);

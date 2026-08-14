@@ -37,6 +37,35 @@ function percent(numerator: number, denominator: number): number {
   return Math.round((numerator / denominator) * 100);
 }
 
+function KpiCard({
+  label,
+  value,
+  pct,
+}: {
+  label: string;
+  /** Pre-formatted display value, e.g. "38.420" or "96,2%". */
+  value: string;
+  /** 0-100, omitted for the raw "sent" card which has no ratio of its own. */
+  pct?: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-[18px] shadow-[var(--shadow)]">
+      <p className="text-[12.5px] font-semibold text-muted-foreground">{label}</p>
+      <p className="mt-1.5 text-[28px] leading-none font-bold tabular-nums text-foreground">
+        {value}
+      </p>
+      {pct !== undefined && (
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-1.5 rounded-full bg-primary"
+            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RateCell({
   value,
   total,
@@ -108,6 +137,19 @@ export default function BroadcastsPage() {
 
   const anySending = useMemo(
     () => broadcasts.some((b) => b.status === 'sending'),
+    [broadcasts],
+  );
+  const totals = useMemo(
+    () =>
+      broadcasts.reduce(
+        (acc, b) => ({
+          sent: acc.sent + b.sent_count,
+          delivered: acc.delivered + b.delivered_count,
+          read: acc.read + b.read_count,
+          replied: acc.replied + b.replied_count,
+        }),
+        { sent: 0, delivered: 0, read: 0, replied: 0 },
+      ),
     [broadcasts],
   );
   const sendingCount = useMemo(
@@ -234,7 +276,7 @@ export default function BroadcastsPage() {
       </div>
 
       {broadcasts.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center rounded-xl border border-border bg-card">
+        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-border bg-card shadow-[var(--shadow)]">
           <Radio className="mb-3 h-10 w-10 text-muted-foreground" />
           <p className="text-sm font-medium text-foreground">{t('noBroadcastsYet')}</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -251,7 +293,26 @@ export default function BroadcastsPage() {
           </GatedButton>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard label={t('kpi.sent')} value={totals.sent.toLocaleString()} />
+            <KpiCard
+              label={t('kpi.delivered')}
+              value={`${percent(totals.delivered, totals.sent)}%`}
+              pct={percent(totals.delivered, totals.sent)}
+            />
+            <KpiCard
+              label={t('kpi.read')}
+              value={`${percent(totals.read, totals.sent)}%`}
+              pct={percent(totals.read, totals.sent)}
+            />
+            <KpiCard
+              label={t('kpi.replied')}
+              value={`${percent(totals.replied, totals.sent)}%`}
+              pct={percent(totals.replied, totals.sent)}
+            />
+          </div>
+        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-[var(--shadow)]">
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
@@ -330,6 +391,7 @@ export default function BroadcastsPage() {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
     </div>
   );

@@ -465,6 +465,8 @@
       "importBtn": "Import {count} contact",
       "importBtn_plural": "Import {count} contacts",
       "toastNoValidRows": "No valid rows found. Ensure CSV has a \"phone\" (or \"telefone\") column header.",
+      "toastCorruptedPhones": "The phone numbers in this file turned into scientific notation (e.g. 5.58E+12) — Excel converted the column to a number and the original digits are gone. Format the phone column as Text in Excel before saving again, or re-export without opening it in Excel.",
+      "toastSomeCorruptedPhones": "{count} {count, plural, =1 {row had a phone number} other {rows had phone numbers}} in scientific notation (Excel converted it to a number) and {count, plural, =1 {was skipped} other {were skipped}} — the original digits are gone. Format the phone column as Text in Excel before saving.",
       "toastTagsWarning": "Contacts imported, but some tag assignments failed.",
       "toastImported": "{count} contact imported",
       "toastImported_plural": "{count} contacts imported",
@@ -660,7 +662,13 @@
       },
       "errorLoad": "Failed to load broadcasts",
       "retry": "Retry",
-      "inProgress": "{count} {count, plural, =1 {campaign} other {campaigns}} in progress"
+      "inProgress": "{count} {count, plural, =1 {campaign} other {campaigns}} in progress",
+      "kpi": {
+        "sent": "Sent",
+        "delivered": "Delivered",
+        "read": "Read",
+        "replied": "Replied"
+      }
     },
     "status": {
       "draft": "Draft",
