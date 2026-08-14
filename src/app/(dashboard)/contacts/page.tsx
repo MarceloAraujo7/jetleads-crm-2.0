@@ -579,7 +579,7 @@ export default function ContactsPage() {
       )}
 
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-2xl border border-border shadow-[var(--shadow)] overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
@@ -594,9 +594,9 @@ export default function ContactsPage() {
               </TableHead>
               <TableHead className="text-muted-foreground">{t('tableColumns.name')}</TableHead>
               <TableHead className="text-muted-foreground">{t('tableColumns.phone')}</TableHead>
-              <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.email')}</TableHead>
-              <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.company')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.tags')}</TableHead>
+              <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.company')}</TableHead>
+              <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.source')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.createdAt')}</TableHead>
               <TableHead className="text-muted-foreground w-12" />
             </TableRow>
@@ -652,16 +652,24 @@ export default function ContactsPage() {
                     />
                   </TableCell>
                   <TableCell className="text-foreground font-medium">
-                    {contact.name || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary">
+                        {(contact.name || contact.phone).charAt(0).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="truncate">
+                          {contact.name || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
+                        </div>
+                        {contact.email && (
+                          <div className="truncate text-xs font-normal text-muted-foreground">
+                            {contact.email}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground font-mono text-xs">
                     {contact.phone}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden md:table-cell text-sm">
-                    {contact.email || <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground hidden lg:table-cell text-sm">
-                    {contact.company || <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
@@ -687,6 +695,12 @@ export default function ContactsPage() {
                         </span>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden lg:table-cell text-sm">
+                    {contact.company || <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden lg:table-cell text-xs">
+                    {contact.source ? t(`source.${contact.source}`) : '—'}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs hidden lg:table-cell">
                     {new Date(contact.created_at).toLocaleDateString('en-US', {

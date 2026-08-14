@@ -98,6 +98,13 @@ export interface AccountInvitation {
   accepted_by_user_id: string | null;
 }
 
+export type ContactSource =
+  | 'manual'
+  | 'csv_import'
+  | 'whatsapp_inbound'
+  | 'evolution_inbound'
+  | 'api';
+
 export interface Contact {
   id: string;
   user_id: string;
@@ -110,6 +117,10 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  /** Where this contact was created from (migration 038). Defaults
+   *  to 'manual' at the DB level, but optional here since most
+   *  existing `select()` calls don't fetch it explicitly. */
+  source?: ContactSource;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

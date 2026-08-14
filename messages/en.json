@@ -306,7 +306,15 @@
         "email": "Email",
         "company": "Company",
         "tags": "Tags",
-        "createdAt": "Created"
+        "createdAt": "Created",
+        "source": "Source"
+      },
+      "source": {
+        "manual": "Manual",
+        "csv_import": "Import",
+        "whatsapp_inbound": "WhatsApp",
+        "evolution_inbound": "WhatsApp",
+        "api": "API"
       },
       "loading": "Loading contacts...",
       "noContactsMatch": "No contacts match your filters.",

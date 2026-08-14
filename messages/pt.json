@@ -306,7 +306,15 @@
         "email": "E-mail",
         "company": "Empresa",
         "tags": "Tags",
-        "createdAt": "Criado em"
+        "createdAt": "Criado em",
+        "source": "Origem"
+      },
+      "source": {
+        "manual": "Manual",
+        "csv_import": "Importação",
+        "whatsapp_inbound": "WhatsApp",
+        "evolution_inbound": "WhatsApp",
+        "api": "API"
       },
       "loading": "Carregando contatos...",
       "noContactsMatch": "Nenhum contato corresponde aos filtros.",
