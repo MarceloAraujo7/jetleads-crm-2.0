@@ -58,7 +58,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
 
   return (
     <section className="rounded-2xl border border-border bg-card shadow-[var(--shadow)]">
-      <header className="flex items-center justify-between border-b border-border px-5 py-4">
+      <header className="flex items-center justify-between px-5 py-4">
         <h2 className="text-sm font-semibold text-foreground">{t('title')}</h2>
         <Link
           href="/inbox"
@@ -84,16 +84,12 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
         </div>
       ) : (
         <>
-          <ul className="divide-y divide-border">
-            {visible.map((it, i) => {
+          <ul className="flex flex-col gap-1 px-3 pb-3">
+            {visible.map((it) => {
               const theme = KIND_THEME[it.kind]
               const Icon = theme.icon
-              // Alternating row background for scanability. bg-muted/40
-              // keeps the stripe visible in both light and dark modes
-              // (bg-card/40 vanishes against a white card surface in light).
-              const stripe = i % 2 === 0 ? 'bg-transparent' : 'bg-muted/40'
               const row = (
-                <div className="flex items-center gap-3 px-5 py-2.5">
+                <div className="flex items-center gap-3 rounded-xl px-2.5 py-2.5">
                   <span
                     className={cn(
                       'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full',
@@ -111,7 +107,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
                 </div>
               )
               return (
-                <li key={it.id} className={cn(stripe, 'transition-colors hover:bg-muted/40')}>
+                <li key={it.id} className="rounded-xl transition-colors hover:bg-muted/50">
                   {it.href ? (
                     <Link href={it.href} className="block">
                       {row}
@@ -123,7 +119,7 @@ export function ActivityFeed({ items, loading }: ActivityFeedProps) {
               )
             })}
           </ul>
-          <footer className="flex items-center justify-between border-t border-border px-5 py-3 text-xs">
+          <footer className="flex items-center justify-between px-5 py-3 text-xs">
             <span className="text-muted-foreground tabular-nums">
               {t('showingOf', { visible: visible.length, totalLoaded, plus: totalLoaded === 50 ? '+' : '' })}
             </span>

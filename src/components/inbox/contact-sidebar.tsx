@@ -173,10 +173,10 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               </Button>
             </div>
 
-            <div className="mt-3.5 space-y-1 border-t border-border pt-3.5">
+            <div className="mt-3.5 space-y-1">
               <button
                 onClick={handleCopyPhone}
-                className="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+                className="flex w-full items-center gap-2 rounded-lg bg-card-2 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
               >
                 <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="flex-1 text-left">{contact.phone}</span>
@@ -188,7 +188,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
               </button>
 
               {contact.email && (
-                <div className="flex items-center gap-2 rounded-lg px-1 py-1 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-lg bg-card-2 px-2.5 py-1.5 text-xs text-muted-foreground">
                   <Mail className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="truncate">{contact.email}</span>
                 </div>

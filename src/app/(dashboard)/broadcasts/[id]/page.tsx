@@ -471,7 +471,7 @@ export default function BroadcastDetailPage() {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
+                <TableRow>
                   <TableHead className="text-muted-foreground">{t('table.contact')}</TableHead>
                   <TableHead className="text-muted-foreground">{t('table.phone')}</TableHead>
                   <TableHead className="text-muted-foreground">{t('table.status')}</TableHead>
@@ -485,7 +485,7 @@ export default function BroadcastDetailPage() {
                 {filteredRecipients.map((recipient) => {
                   const rStatus = getRecipientStatus(recipient.status);
                   return (
-                    <TableRow key={recipient.id} className="border-border">
+                    <TableRow key={recipient.id}>
                       <TableCell className="font-medium text-foreground">
                         {recipient.contact?.name ?? 'Unknown'}
                       </TableCell>

@@ -30,9 +30,11 @@ export const metadata: Metadata = {
     index: false,
     follow: false,
   },
-  icons: {
-    icon: [{ url: "/icon" }],
-  },
+  // No explicit `icons` override — `src/app/icon.png` is already
+  // picked up automatically by Next's file-convention metadata (served
+  // at /icon.png). An explicit override here previously pointed at
+  // "/icon" (no extension), a URL that doesn't match the real route,
+  // which silently broke the favicon instead of using the real file.
   formatDetection: {
     email: false,
     address: false,

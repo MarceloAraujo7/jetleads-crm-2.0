@@ -315,7 +315,7 @@ export default function BroadcastsPage() {
         <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-[var(--shadow)]">
           <Table>
             <TableHeader>
-              <TableRow className="border-border hover:bg-transparent">
+              <TableRow>
                 <TableHead className="text-muted-foreground">{t('table.name')}</TableHead>
                 <TableHead className="hidden text-muted-foreground md:table-cell">{t('table.template')}</TableHead>
                 <TableHead className="hidden text-right text-muted-foreground sm:table-cell">
@@ -336,7 +336,7 @@ export default function BroadcastsPage() {
                 return (
                   <TableRow
                     key={broadcast.id}
-                    className="cursor-pointer border-border hover:bg-muted/50"
+                    className="cursor-pointer"
                     onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
                   >
                     <TableCell className="font-medium text-foreground">
