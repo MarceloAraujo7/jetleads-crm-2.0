@@ -4,10 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import type {
+  AccountMember,
   Campaign,
   CampaignAction,
   CampaignActionType,
   CampaignStatus,
+  LeadDistributionStrategy,
 } from "@/types";
 import {
   Dialog,
@@ -26,6 +28,18 @@ interface EntityOption {
   id: string;
   label: string;
 }
+
+interface LeadBaseOption {
+  id: string;
+  name: string;
+}
+
+const NEW_LEAD_BASE = "__new__";
+// 'manual' isn't a stored strategy value — it maps to
+// lead_bases.distribution_enabled=false, matching the account-wide
+// distribution-settings-dialog.tsx convention.
+type StrategyChoice = "manual" | LeadDistributionStrategy;
+const STRATEGY_CHOICES: StrategyChoice[] = ["manual", "least_loaded", "round_robin", "equal"];
 
 interface ActionRow {
   localId: string;
@@ -81,6 +95,21 @@ export function CampaignForm({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  // Lead base — the campaign's real, contact-linked audience. Empty
+  // string keeps the legacy free-text audienceLabel/audienceCount
+  // path for campaigns that don't need one.
+  const [leadBases, setLeadBases] = useState<LeadBaseOption[]>([]);
+  const [leadBaseId, setLeadBaseId] = useState<string>("");
+  const [newBaseName, setNewBaseName] = useState("");
+  const [creatingBase, setCreatingBase] = useState(false);
+  const [liveContactCount, setLiveContactCount] = useState<number | null>(null);
+  const [leadBaseDetailsLoading, setLeadBaseDetailsLoading] = useState(false);
+
+  const [accountMembers, setAccountMembers] = useState<AccountMember[]>([]);
+  const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
+  const [quotaByUser, setQuotaByUser] = useState<Map<string, string>>(new Map());
+  const [distributionChoice, setDistributionChoice] = useState<StrategyChoice>("manual");
+
   useEffect(() => {
     if (!open) return;
     setName(campaign?.name ?? "");
@@ -96,7 +125,109 @@ export function CampaignForm({
       })),
     );
     setConfirmDelete(false);
+    setNewBaseName("");
+    setLeadBaseId(campaign?.lead_base_id ?? "");
+    if (!campaign?.lead_base_id) {
+      setSelectedMemberIds(new Set());
+      setQuotaByUser(new Map());
+      setDistributionChoice("manual");
+      setLiveContactCount(null);
+    }
   }, [open, campaign, initialActions]);
+
+  // Lead bases (for the picker) + account roster (for the team
+  // checklist) — fetched once per open, independent of the action
+  // entity lists below.
+  useEffect(() => {
+    if (!open || !accountId) return;
+    (async () => {
+      const [basesRes, membersRes] = await Promise.all([
+        supabase.from("lead_bases").select("id, name").order("created_at", { ascending: false }),
+        fetch("/api/account/members", { cache: "no-store" }),
+      ]);
+      setLeadBases((basesRes.data ?? []).map((b) => ({ id: b.id, name: b.name })));
+      if (membersRes.ok) {
+        const data = (await membersRes.json()) as { members: AccountMember[] };
+        setAccountMembers(data.members ?? []);
+      }
+    })();
+  }, [open, accountId, supabase]);
+
+  const loadLeadBaseDetails = useCallback(
+    async (id: string) => {
+      setLeadBaseDetailsLoading(true);
+      try {
+        const [baseRes, membersRes, countRes] = await Promise.all([
+          supabase
+            .from("lead_bases")
+            .select("distribution_enabled, distribution_strategy")
+            .eq("id", id)
+            .maybeSingle(),
+          supabase.from("lead_base_members").select("user_id, daily_lead_quota").eq("lead_base_id", id),
+          supabase.from("contacts").select("id", { count: "exact", head: true }).eq("lead_base_id", id),
+        ]);
+        setDistributionChoice(
+          baseRes.data?.distribution_enabled
+            ? ((baseRes.data.distribution_strategy as LeadDistributionStrategy) ?? "least_loaded")
+            : "manual",
+        );
+        setSelectedMemberIds(new Set((membersRes.data ?? []).map((m) => m.user_id as string)));
+        setQuotaByUser(
+          new Map(
+            (membersRes.data ?? []).map((m) => [
+              m.user_id as string,
+              m.daily_lead_quota != null ? String(m.daily_lead_quota) : "",
+            ]),
+          ),
+        );
+        setLiveContactCount(countRes.count ?? 0);
+      } finally {
+        setLeadBaseDetailsLoading(false);
+      }
+    },
+    [supabase],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    if (leadBaseId && leadBaseId !== NEW_LEAD_BASE) {
+      loadLeadBaseDetails(leadBaseId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, leadBaseId]);
+
+  async function handleCreateBase() {
+    if (!accountId || !newBaseName.trim() || creatingBase) return;
+    setCreatingBase(true);
+    try {
+      const { data, error } = await supabase
+        .from("lead_bases")
+        .insert({ account_id: accountId, name: newBaseName.trim() })
+        .select("id, name")
+        .single();
+      if (error) throw error;
+      setLeadBases((prev) => [{ id: data.id, name: data.name }, ...prev]);
+      setLeadBaseId(data.id);
+      setLiveContactCount(0);
+      setSelectedMemberIds(new Set());
+      setQuotaByUser(new Map());
+      setDistributionChoice("manual");
+      setNewBaseName("");
+    } catch {
+      toast.error(t("toastFailedCreateBase"));
+    } finally {
+      setCreatingBase(false);
+    }
+  }
+
+  function toggleMember(userId: string) {
+    setSelectedMemberIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!open || !accountId) return;
@@ -156,18 +287,49 @@ export function CampaignForm({
   const canSave =
     name.trim().length > 0 &&
     rows.length > 0 &&
-    rows.every((r) => r.title.trim().length > 0 && r.linkedId.length > 0);
+    rows.every((r) => r.title.trim().length > 0 && r.linkedId.length > 0) &&
+    leadBaseId !== NEW_LEAD_BASE;
 
   async function handleSave() {
     if (!accountId || !canSave) return;
     setSaving(true);
     try {
+      const hasLeadBase = leadBaseId && leadBaseId !== NEW_LEAD_BASE;
+
+      if (hasLeadBase) {
+        const { error: baseError } = await supabase
+          .from("lead_bases")
+          .update({
+            distribution_enabled: distributionChoice !== "manual",
+            distribution_strategy: distributionChoice === "manual" ? "least_loaded" : distributionChoice,
+          })
+          .eq("id", leadBaseId);
+        if (baseError) throw baseError;
+
+        const { error: delMembersError } = await supabase
+          .from("lead_base_members")
+          .delete()
+          .eq("lead_base_id", leadBaseId);
+        if (delMembersError) throw delMembersError;
+
+        if (selectedMemberIds.size > 0) {
+          const memberRows = Array.from(selectedMemberIds).map((userId) => ({
+            lead_base_id: leadBaseId,
+            user_id: userId,
+            daily_lead_quota: quotaByUser.get(userId)?.trim() ? Number(quotaByUser.get(userId)) : null,
+          }));
+          const { error: insMembersError } = await supabase.from("lead_base_members").insert(memberRows);
+          if (insMembersError) throw insMembersError;
+        }
+      }
+
       let campaignId = campaign?.id;
       const payload = {
         account_id: accountId,
         name: name.trim(),
-        audience_label: audienceLabel.trim() || null,
-        audience_count: audienceCount ? Number(audienceCount) : null,
+        audience_label: hasLeadBase ? null : audienceLabel.trim() || null,
+        audience_count: hasLeadBase ? null : audienceCount ? Number(audienceCount) : null,
+        lead_base_id: hasLeadBase ? leadBaseId : null,
         status,
       };
 
@@ -248,27 +410,132 @@ export function CampaignForm({
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">{t("audienceLabel")}</Label>
-                <Input
-                  value={audienceLabel}
-                  onChange={(e) => setAudienceLabel(e.target.value)}
-                  placeholder={t("audienceLabelPlaceholder")}
-                  className="border-border bg-muted text-foreground"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label className="text-muted-foreground">{t("audienceCount")}</Label>
-                <Input
-                  type="number"
-                  value={audienceCount}
-                  onChange={(e) => setAudienceCount(e.target.value)}
-                  placeholder="0"
-                  className="border-border bg-muted text-foreground"
-                />
-              </div>
+            <div className="grid gap-2">
+              <Label className="text-muted-foreground">{t("leadBase")}</Label>
+              <select
+                value={leadBaseId}
+                onChange={(e) => setLeadBaseId(e.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+              >
+                <option value="">{t("leadBaseNone")}</option>
+                {leadBases.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+                <option value={NEW_LEAD_BASE}>{t("leadBaseCreateNew")}</option>
+              </select>
             </div>
+
+            {leadBaseId === NEW_LEAD_BASE && (
+              <div className="flex gap-2">
+                <Input
+                  value={newBaseName}
+                  onChange={(e) => setNewBaseName(e.target.value)}
+                  placeholder={t("leadBaseNamePlaceholder")}
+                  className="border-border bg-muted text-foreground"
+                />
+                <Button
+                  type="button"
+                  onClick={handleCreateBase}
+                  disabled={creatingBase || !newBaseName.trim()}
+                  className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {creatingBase ? <Loader2 className="h-4 w-4 animate-spin" /> : t("leadBaseCreate")}
+                </Button>
+              </div>
+            )}
+
+            {!leadBaseId && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("audienceLabel")}</Label>
+                  <Input
+                    value={audienceLabel}
+                    onChange={(e) => setAudienceLabel(e.target.value)}
+                    placeholder={t("audienceLabelPlaceholder")}
+                    className="border-border bg-muted text-foreground"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("audienceCount")}</Label>
+                  <Input
+                    type="number"
+                    value={audienceCount}
+                    onChange={(e) => setAudienceCount(e.target.value)}
+                    placeholder="0"
+                    className="border-border bg-muted text-foreground"
+                  />
+                </div>
+              </div>
+            )}
+
+            {leadBaseId && leadBaseId !== NEW_LEAD_BASE && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  {leadBaseDetailsLoading ? t("loadingBaseDetails") : t("leadBaseContactCount", { count: liveContactCount ?? 0 })}
+                </p>
+
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("team")}</Label>
+                  {accountMembers.length === 0 ? (
+                    <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">{t("noMembers")}</p>
+                  ) : (
+                    <div className="max-h-40 space-y-1 overflow-y-auto rounded-xl bg-card-2 p-2">
+                      {accountMembers.map((m) => {
+                        const checked = selectedMemberIds.has(m.user_id);
+                        return (
+                          <div key={m.user_id} className="flex items-center gap-2 rounded-lg px-1.5 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleMember(m.user_id)}
+                              className="h-3.5 w-3.5 accent-primary"
+                            />
+                            <span className="min-w-0 flex-1 truncate text-xs text-foreground">
+                              {m.full_name || m.email || m.user_id}
+                            </span>
+                            {checked && distributionChoice !== "manual" && (
+                              <input
+                                type="number"
+                                min={0}
+                                inputMode="numeric"
+                                placeholder={t("noLimit")}
+                                value={quotaByUser.get(m.user_id) ?? ""}
+                                onChange={(e) =>
+                                  setQuotaByUser((prev) => new Map(prev).set(m.user_id, e.target.value))
+                                }
+                                className="h-7 w-16 shrink-0 rounded-md border border-border bg-muted px-1.5 text-[11px] text-foreground outline-none focus:border-primary"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("distribution")}</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {STRATEGY_CHOICES.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setDistributionChoice(s)}
+                        className={`rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
+                          distributionChoice === s
+                            ? "border-primary bg-primary-soft text-primary"
+                            : "border-border text-muted-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {t(`strategy.${s}`)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("status")}</Label>

@@ -31,6 +31,8 @@ type StatusFilter = CampaignStatus;
 interface CampaignWithActions {
   campaign: Campaign;
   actions: CampaignActionWithProgress[];
+  leadBaseName?: string;
+  leadBaseCount?: number;
 }
 
 function ActionCard({ action }: { action: CampaignActionWithProgress }) {
@@ -107,12 +109,18 @@ function CampaignCard({
               {t(`status.${campaign.status}`)}
             </span>
           </div>
-          {(campaign.audience_label || campaign.audience_count != null) && (
+          {entry.leadBaseName ? (
             <p className="mt-1 text-xs text-muted-foreground">
-              {[campaign.audience_label, campaign.audience_count != null ? t("audienceLeads", { count: campaign.audience_count }) : null]
-                .filter(Boolean)
-                .join(" · ")}
+              {[entry.leadBaseName, t("audienceLeads", { count: entry.leadBaseCount ?? 0 })].join(" · ")}
             </p>
+          ) : (
+            (campaign.audience_label || campaign.audience_count != null) && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {[campaign.audience_label, campaign.audience_count != null ? t("audienceLeads", { count: campaign.audience_count }) : null]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )
           )}
           <p className="mt-0.5 text-xs text-muted-foreground">
             {t("actionsInParallel", { count: actions.length })}
@@ -192,6 +200,21 @@ export default function CampaignsPage() {
         actionsByCampaign.set(action.campaign_id, list);
       }
 
+      const leadBaseIds = [...new Set((campaigns ?? []).map((c) => c.lead_base_id).filter(Boolean))] as string[];
+      const leadBaseNameById = new Map<string, string>();
+      const leadBaseCountById = new Map<string, number>();
+      if (leadBaseIds.length > 0) {
+        const [{ data: bases }, { data: baseContacts }] = await Promise.all([
+          supabase.from("lead_bases").select("id, name").in("id", leadBaseIds),
+          supabase.from("contacts").select("lead_base_id").in("lead_base_id", leadBaseIds),
+        ]);
+        for (const b of bases ?? []) leadBaseNameById.set(b.id, b.name);
+        for (const row of baseContacts ?? []) {
+          const id = row.lead_base_id as string;
+          leadBaseCountById.set(id, (leadBaseCountById.get(id) ?? 0) + 1);
+        }
+      }
+
       const withProgress = await Promise.all(
         (campaigns ?? []).map(async (campaign) => ({
           campaign,
@@ -199,6 +222,8 @@ export default function CampaignsPage() {
             actionsByCampaign.get(campaign.id) ?? [],
             t,
           ),
+          leadBaseName: campaign.lead_base_id ? leadBaseNameById.get(campaign.lead_base_id) : undefined,
+          leadBaseCount: campaign.lead_base_id ? leadBaseCountById.get(campaign.lead_base_id) ?? 0 : undefined,
         })),
       );
 
@@ -238,6 +263,7 @@ export default function CampaignsPage() {
         name: t("duplicateName", { name: entry.campaign.name }),
         audience_label: entry.campaign.audience_label,
         audience_count: entry.campaign.audience_count,
+        lead_base_id: entry.campaign.lead_base_id,
         status: "scheduled",
       })
       .select("id")
