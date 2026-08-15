@@ -184,6 +184,18 @@ export async function PATCH(
       }
     }
 
+    // Only one default-for-broadcasts template per account (migration
+    // 048's partial unique index) — clear any existing one first when
+    // this edit claims it.
+    if (payload.is_default_for_broadcasts) {
+      await supabase
+        .from('message_templates')
+        .update({ is_default_for_broadcasts: false })
+        .eq('account_id', accountId)
+        .eq('is_default_for_broadcasts', true)
+        .neq('id', id)
+    }
+
     // Meta accepted the edit — status flips back to PENDING for review.
     const { data: row, error: updErr } = await supabase
       .from('message_templates')
@@ -197,6 +209,8 @@ export async function PATCH(
         footer_text: payload.footer_text ?? null,
         buttons: payload.buttons ?? null,
         sample_values: payload.sample_values ?? null,
+        variable_names: payload.variable_names ?? null,
+        is_default_for_broadcasts: payload.is_default_for_broadcasts ?? false,
         status: 'PENDING',
         submission_error: null,
         rejection_reason: null,

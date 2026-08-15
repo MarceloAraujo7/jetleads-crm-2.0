@@ -46,6 +46,9 @@ export interface TemplatePayload {
   footer_text?: string;
   buttons?: TemplateButton[];
   sample_values?: TemplateSampleValues;
+  /** Passthrough-only — never validated/sent to Meta, see migration 048. */
+  variable_names?: TemplateSampleValues;
+  is_default_for_broadcasts?: boolean;
 }
 
 export function validateTemplateName(name: string): void {

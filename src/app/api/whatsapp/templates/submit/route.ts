@@ -24,6 +24,10 @@ function buildUpsertRow(
     status: 'DRAFT' | string
     metaTemplateId: string | null
     submissionError: string | null
+    /** Skip stamping last_submitted_at — set only when we actually
+     *  called Meta (rate-limit awareness depends on this being
+     *  accurate, not just "row was saved"). */
+    submitted: boolean
   },
 ) {
   return {
@@ -46,13 +50,15 @@ function buildUpsertRow(
     footer_text: payload.footer_text ?? null,
     buttons: payload.buttons ?? null,
     sample_values: payload.sample_values ?? null,
+    variable_names: payload.variable_names ?? null,
+    is_default_for_broadcasts: payload.is_default_for_broadcasts ?? false,
     status: extras.status,
     meta_template_id: extras.metaTemplateId,
     submission_error: extras.submissionError,
     // Clear stale rejection_reason whenever we re-submit; the
     // webhook will set it again if Meta still rejects.
     rejection_reason: extras.submissionError ? null : null,
-    last_submitted_at: new Date().toISOString(),
+    last_submitted_at: extras.submitted ? new Date().toISOString() : null,
   }
 }
 
@@ -112,12 +118,17 @@ export async function POST(request: Request) {
       )
     }
 
-    let payload: TemplatePayload
+    let payload: TemplatePayload & { submitNow?: boolean }
     try {
-      payload = (await request.json()) as TemplatePayload
+      payload = (await request.json()) as TemplatePayload & { submitNow?: boolean }
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
     }
+    // The wizard's "Enviar para aprovação agora" toggle — false saves
+    // a local DRAFT only, skipping the Meta API call entirely.
+    // Defaults true so existing callers (the old template-manager
+    // form, which always submitted) keep working unchanged.
+    const submitNow = payload.submitNow !== false
 
     if (payload.category === 'Authentication') {
       return NextResponse.json(
@@ -136,6 +147,33 @@ export async function POST(request: Request) {
         { error: e instanceof Error ? e.message : 'Validation failed.' },
         { status: 400 },
       )
+    }
+
+    // Only one default-for-broadcasts template per account (migration
+    // 048's partial unique index would otherwise throw on the upsert
+    // below) — clear any existing one first when this save claims it.
+    if (payload.is_default_for_broadcasts) {
+      await supabase
+        .from('message_templates')
+        .update({ is_default_for_broadcasts: false })
+        .eq('account_id', accountId)
+        .eq('is_default_for_broadcasts', true)
+    }
+
+    if (!submitNow) {
+      const { data: row, error: upsertErr } = await upsertTemplateRow(
+        supabase,
+        buildUpsertRow(accountId, user.id, payload, {
+          status: 'DRAFT',
+          metaTemplateId: null,
+          submissionError: null,
+          submitted: false,
+        }),
+      )
+      if (upsertErr) {
+        return NextResponse.json({ error: upsertErr.message }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, template: row, dry_run: false })
     }
 
     const dryRun =
@@ -209,6 +247,7 @@ export async function POST(request: Request) {
             status: 'DRAFT',
             metaTemplateId: null,
             submissionError: message,
+            submitted: true,
           }),
         )
         const isRateLimit = /\b429\b/.test(message)
@@ -229,6 +268,7 @@ export async function POST(request: Request) {
         status: normalizeStatus(metaStatus),
         metaTemplateId,
         submissionError: null,
+        submitted: true,
       }),
     )
 

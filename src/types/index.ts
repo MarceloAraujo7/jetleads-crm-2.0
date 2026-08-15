@@ -333,6 +333,7 @@ export interface TemplateSampleValues {
 
 export interface MessageTemplate {
   id: string;
+  account_id?: string;
   user_id: string;
   name: string;
   category: 'Marketing' | 'Utility' | 'Authentication';
@@ -345,6 +346,14 @@ export interface MessageTemplate {
   footer_text?: string;
   buttons?: TemplateButton[];
   sample_values?: TemplateSampleValues;
+  /** Friendly names shown in the wizard as [nome]/[loja] chips,
+   *  ordered 1:1 with the {{1}}, {{2}}... positions actually stored
+   *  in body_text/header_content (migration 048). Meta never sees
+   *  this — it's purely for redisplaying the named form on edit. */
+  variable_names?: TemplateSampleValues;
+  /** "Usar como padrão em disparos" — at most one true per account
+   *  (migration 048's partial unique index). */
+  is_default_for_broadcasts?: boolean;
   status?: MessageTemplateStatus;
   meta_template_id?: string;
   rejection_reason?: string;
