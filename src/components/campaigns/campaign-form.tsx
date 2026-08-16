@@ -10,6 +10,7 @@ import type {
   CampaignActionType,
   CampaignStatus,
   LeadDistributionStrategy,
+  MessageTemplate,
 } from "@/types";
 import {
   Dialog,
@@ -20,9 +21,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Radio, Zap, Workflow, Bot, Loader2 } from "lucide-react";
+import { Plus, Trash2, Radio, Zap, Workflow, Bot, Loader2, Upload, UserPlus, Send, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { ImportModal } from "@/components/contacts/import-modal";
+import { InviteMemberDialog } from "@/components/settings/invite-member-dialog";
+import { useBroadcastSending } from "@/hooks/use-broadcast-sending";
+import { extractVariableIndices } from "@/lib/whatsapp/template-validators";
 
 interface EntityOption {
   id: string;
@@ -46,6 +51,11 @@ interface ActionRow {
   action_type: CampaignActionType;
   title: string;
   linkedId: string;
+  /** Broadcast rows only — the template picked before "Criar e enviar
+   *  disparo" is clicked. Cleared (and irrelevant) once linkedId is
+   *  set, since a campaign always creates a brand-new broadcast
+   *  rather than reusing an existing one. */
+  pendingTemplateId?: string;
 }
 
 interface CampaignFormProps {
@@ -85,11 +95,13 @@ export function CampaignForm({
   const [status, setStatus] = useState<CampaignStatus>("scheduled");
   const [rows, setRows] = useState<ActionRow[]>([]);
 
-  const [broadcasts, setBroadcasts] = useState<EntityOption[]>([]);
+  const [approvedTemplates, setApprovedTemplates] = useState<MessageTemplate[]>([]);
   const [automations, setAutomations] = useState<EntityOption[]>([]);
   const [flows, setFlows] = useState<EntityOption[]>([]);
   const [aiConfigId, setAiConfigId] = useState<string | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
+  const [creatingBroadcastFor, setCreatingBroadcastFor] = useState<string | null>(null);
+  const { createAndSendBroadcast } = useBroadcastSending();
 
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -109,6 +121,9 @@ export function CampaignForm({
   const [selectedMemberIds, setSelectedMemberIds] = useState<Set<string>>(new Set());
   const [quotaByUser, setQuotaByUser] = useState<Map<string, string>>(new Map());
   const [distributionChoice, setDistributionChoice] = useState<StrategyChoice>("manual");
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -233,10 +248,11 @@ export function CampaignForm({
     if (!open || !accountId) return;
     setOptionsLoading(true);
     (async () => {
-      const [broadcastsRes, automationsRes, flowsRes, aiConfigRes] = await Promise.all([
+      const [templatesRes, automationsRes, flowsRes, aiConfigRes] = await Promise.all([
         supabase
-          .from("broadcasts")
-          .select("id, name")
+          .from("message_templates")
+          .select("*")
+          .eq("status", "APPROVED")
           .order("created_at", { ascending: false }),
         supabase
           .from("automations")
@@ -248,7 +264,15 @@ export function CampaignForm({
           .order("created_at", { ascending: false }),
         supabase.from("ai_configs").select("id").maybeSingle(),
       ]);
-      setBroadcasts((broadcastsRes.data ?? []).map((b) => ({ id: b.id, label: b.name })));
+      // Restricted to 0-or-1 body variable so it can be auto-mapped to
+      // the contact's name with no personalization step here — a
+      // template with more variables needs the full /broadcasts/new
+      // wizard to map them correctly.
+      setApprovedTemplates(
+        ((templatesRes.data ?? []) as MessageTemplate[]).filter(
+          (tpl) => extractVariableIndices(tpl.body_text).length <= 1,
+        ),
+      );
       setAutomations((automationsRes.data ?? []).map((a) => ({ id: a.id, label: a.name })));
       setFlows((flowsRes.data ?? []).map((f) => ({ id: f.id, label: f.name })));
       setAiConfigId(aiConfigRes.data?.id ?? null);
@@ -258,13 +282,38 @@ export function CampaignForm({
 
   const optionsForType = useCallback(
     (type: CampaignActionType): EntityOption[] => {
-      if (type === "broadcast") return broadcasts;
       if (type === "automation") return automations;
       if (type === "flow") return flows;
-      return aiConfigId ? [{ id: aiConfigId, label: tType("agent") }] : [];
+      if (type === "agent") return aiConfigId ? [{ id: aiConfigId, label: tType("agent") }] : [];
+      return [];
     },
-    [broadcasts, automations, flows, aiConfigId, tType],
+    [automations, flows, aiConfigId, tType],
   );
+
+  async function handleCreateBroadcast(row: ActionRow) {
+    const template = approvedTemplates.find((tpl) => tpl.id === row.pendingTemplateId);
+    if (!template || !accountId || leadBaseId === NEW_LEAD_BASE || !leadBaseId) return;
+    if (!window.confirm(t("confirmSendBroadcast", { count: liveContactCount ?? 0 }))) return;
+
+    setCreatingBroadcastFor(row.localId);
+    try {
+      const bodyVarCount = extractVariableIndices(template.body_text).length;
+      const variables: Record<string, { type: "field"; value: string }> =
+        bodyVarCount > 0 ? { "1": { type: "field", value: "name" } } : {};
+      const broadcastId = await createAndSendBroadcast({
+        name: row.title.trim() || template.name,
+        template,
+        audience: { type: "lead_base", leadBaseId },
+        variables,
+      });
+      updateRow(row.localId, { linkedId: broadcastId, pendingTemplateId: undefined });
+      toast.success(t("toastBroadcastCreated"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("toastBroadcastFailed"));
+    } finally {
+      setCreatingBroadcastFor(null);
+    }
+  }
 
   const availableTypes = useMemo<CampaignActionType[]>(() => {
     const types: CampaignActionType[] = ["broadcast", "automation", "flow"];
@@ -390,6 +439,7 @@ export function CampaignForm({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90vh,760px)] w-full flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground sm:max-w-lg">
         <div className="flex h-full flex-col">
@@ -472,12 +522,32 @@ export function CampaignForm({
 
             {leadBaseId && leadBaseId !== NEW_LEAD_BASE && (
               <>
-                <p className="text-xs text-muted-foreground">
-                  {leadBaseDetailsLoading ? t("loadingBaseDetails") : t("leadBaseContactCount", { count: liveContactCount ?? 0 })}
-                </p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    {leadBaseDetailsLoading ? t("loadingBaseDetails") : t("leadBaseContactCount", { count: liveContactCount ?? 0 })}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setImportOpen(true)}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                  >
+                    <Upload className="h-3 w-3" />
+                    {t("importLeads")}
+                  </button>
+                </div>
 
                 <div className="grid gap-2">
-                  <Label className="text-muted-foreground">{t("team")}</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-muted-foreground">{t("team")}</Label>
+                    <button
+                      type="button"
+                      onClick={() => setInviteOpen(true)}
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                    >
+                      <UserPlus className="h-3 w-3" />
+                      {t("inviteMember")}
+                    </button>
+                  </div>
                   {accountMembers.length === 0 ? (
                     <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">{t("noMembers")}</p>
                   ) : (
@@ -617,6 +687,47 @@ export function CampaignForm({
                           <p className="mt-2 text-[11px] text-muted-foreground">
                             {t("agentLinkedNote")}
                           </p>
+                        ) : row.action_type === "broadcast" ? (
+                          row.linkedId ? (
+                            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                              <Check className="h-3 w-3" />
+                              {t("broadcastCreated")}
+                            </p>
+                          ) : !leadBaseId || leadBaseId === NEW_LEAD_BASE ? (
+                            <p className="mt-1.5 text-[11px] text-amber-500">{t("broadcastNeedsBase")}</p>
+                          ) : (
+                            <div className="mt-2 space-y-2">
+                              <select
+                                value={row.pendingTemplateId ?? ""}
+                                onChange={(e) => updateRow(row.localId, { pendingTemplateId: e.target.value })}
+                                className="h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
+                              >
+                                <option value="">{t("selectTemplate")}</option>
+                                {approvedTemplates.map((tpl) => (
+                                  <option key={tpl.id} value={tpl.id}>
+                                    {tpl.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {approvedTemplates.length === 0 && (
+                                <p className="text-[11px] text-amber-500">{t("noCompatibleTemplates")}</p>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => handleCreateBroadcast(row)}
+                                disabled={!row.pendingTemplateId || creatingBroadcastFor === row.localId}
+                                className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
+                              >
+                                {creatingBroadcastFor === row.localId ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Send className="h-3.5 w-3.5" />
+                                )}
+                                {t("createAndSendBroadcast")}
+                              </Button>
+                            </div>
+                          )
                         ) : (
                           <select
                             value={row.linkedId}
@@ -631,7 +742,7 @@ export function CampaignForm({
                             ))}
                           </select>
                         )}
-                        {options.length === 0 && row.action_type !== "agent" && (
+                        {options.length === 0 && row.action_type !== "agent" && row.action_type !== "broadcast" && (
                           <p className="mt-1.5 text-[11px] text-amber-500">
                             {t("noEntitiesOfType", { type: tType(row.action_type) })}
                           </p>
@@ -699,5 +810,18 @@ export function CampaignForm({
         </div>
       </DialogContent>
     </Dialog>
+
+    {leadBaseId && leadBaseId !== NEW_LEAD_BASE && (
+      <ImportModal
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        defaultLeadBaseId={leadBaseId}
+        lockLeadBase
+        onImported={() => loadLeadBaseDetails(leadBaseId)}
+      />
+    )}
+
+    <InviteMemberDialog open={inviteOpen} onOpenChange={setInviteOpen} onCreated={() => {}} />
+    </>
   );
 }

@@ -14,12 +14,16 @@ export interface CustomFieldFilter {
 }
 
 export interface AudienceConfig {
-  type: 'all' | 'tags' | 'custom_field' | 'csv';
+  type: 'all' | 'tags' | 'custom_field' | 'csv' | 'lead_base';
   tagIds?: string[];
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
   /** Contacts carrying any of these tags are subtracted from the result. */
   excludeTagIds?: string[];
+  /** Set when `type === 'lead_base'` — every contact in this base
+   *  (see 047_lead_bases.sql). Used by the Campanha form's "create a
+   *  new broadcast" action, which always targets its own lead base. */
+  leadBaseId?: string;
 }
 
 /**
@@ -197,6 +201,13 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       contacts = await resolveCustomFieldAudience(supabase, audience.customField);
     } else if (audience.type === 'csv' && audience.csvContacts) {
       contacts = await upsertCsvContacts(supabase, audience.csvContacts);
+    } else if (audience.type === 'lead_base' && audience.leadBaseId) {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('lead_base_id', audience.leadBaseId);
+      if (error) throw new Error(`Failed to fetch contacts: ${error.message}`);
+      contacts = data ?? [];
     }
 
     // Apply exclude tags (works across all contact-derived audience
@@ -375,6 +386,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             tagIds: payload.audience.tagIds,
             customField: payload.audience.customField,
             excludeTagIds: payload.audience.excludeTagIds,
+            leadBaseId: payload.audience.leadBaseId,
           },
           channel_id: payload.channelId || null,
           campaign_kind: payload.campaignKind || null,
