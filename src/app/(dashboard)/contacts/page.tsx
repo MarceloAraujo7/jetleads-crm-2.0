@@ -52,6 +52,8 @@ import {
   X,
   Send,
   Shuffle,
+  Layers,
+  FolderInput,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -59,6 +61,7 @@ import { ImportModal } from '@/components/contacts/import-modal';
 import { DistributionSettingsDialog } from '@/components/contacts/distribution-settings-dialog';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
+import { useAuth } from '@/hooks/use-auth';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
 
@@ -84,6 +87,7 @@ function ContactsPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
+  const { accountId } = useAuth();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
 
@@ -94,6 +98,12 @@ function ContactsPageInner() {
   const [totalCount, setTotalCount] = useState(0);
   // Tag filter — contacts shown must have ANY of these tags (OR).
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+
+  // Lead base filter — '' = every base (default, still shown grouped
+  // via the table's own "Base" column), '__none__' = only contacts
+  // with no base assigned, otherwise a real lead_bases.id.
+  const [leadBases, setLeadBases] = useState<{ id: string; name: string }[]>([]);
+  const [selectedBaseId, setSelectedBaseId] = useState<string>('');
 
   // Modals
   const [formOpen, setFormOpen] = useState(false);
@@ -111,6 +121,11 @@ function ContactsPageInner() {
   // Bulk selection (page-scoped — only the loaded rows are selectable)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [moveBaseOpen, setMoveBaseOpen] = useState(false);
+  const [moveTargetBaseId, setMoveTargetBaseId] = useState<string>('');
+  const [newBaseNameForMove, setNewBaseNameForMove] = useState('');
+  const [creatingBaseForMove, setCreatingBaseForMove] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   // All tags for display
   const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
@@ -134,6 +149,11 @@ function ContactsPageInner() {
         return pruned.length === prev.length ? prev : pruned;
       });
     }
+  }, [supabase]);
+
+  const fetchLeadBases = useCallback(async () => {
+    const { data } = await supabase.from('lead_bases').select('id, name').order('name');
+    setLeadBases(data ?? []);
   }, [supabase]);
 
   const fetchContacts = useCallback(async () => {
@@ -182,6 +202,11 @@ function ContactsPageInner() {
         const like = `%${term}%`;
         query = query.or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);
       }
+      if (selectedBaseId === '__none__') {
+        query = query.is('lead_base_id', null);
+      } else if (selectedBaseId) {
+        query = query.eq('lead_base_id', selectedBaseId);
+      }
 
       const { data, count: exactCount, error } = await query;
       if (seq !== fetchSeq.current) return; // superseded by a newer fetch
@@ -225,19 +250,21 @@ function ContactsPageInner() {
 
     setContacts(enriched);
     setLoading(false);
-  }, [supabase, page, search, selectedTagIds, tagsMap, t]);
+  }, [supabase, page, search, selectedTagIds, selectedBaseId, tagsMap, t]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not
   // synchronously in the effect body, so the cascade the lint rule
   // warns about doesn't apply here.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchTags();
   }, [fetchTags]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchLeadBases();
+  }, [fetchLeadBases]);
+
+  useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
 
@@ -269,7 +296,6 @@ function ContactsPageInner() {
   useEffect(() => {
     const contactId = searchParams.get('contact');
     if (!contactId) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     openDetail(contactId);
     const params = new URLSearchParams(searchParams.toString());
     params.delete('contact');
@@ -394,6 +420,54 @@ function ContactsPageInner() {
   function clearTagFilters() {
     setSelectedTagIds([]);
     setPage(0);
+  }
+
+  const leadBaseNameById: Record<string, string> = {};
+  leadBases.forEach((b) => (leadBaseNameById[b.id] = b.name));
+
+  function selectBaseFilter(id: string) {
+    setSelectedBaseId((prev) => (prev === id ? '' : id));
+    setPage(0);
+  }
+
+  async function handleCreateBaseForMove() {
+    if (!accountId || !newBaseNameForMove.trim() || creatingBaseForMove) return;
+    setCreatingBaseForMove(true);
+    try {
+      const { data, error } = await supabase
+        .from('lead_bases')
+        .insert({ account_id: accountId, name: newBaseNameForMove.trim() })
+        .select('id, name')
+        .single();
+      if (error) throw error;
+      setLeadBases((prev) => [...prev, { id: data.id, name: data.name }].sort((a, b) => a.name.localeCompare(b.name)));
+      setMoveTargetBaseId(data.id);
+      setNewBaseNameForMove('');
+    } catch {
+      toast.error(t('toastFailedCreateBase'));
+    } finally {
+      setCreatingBaseForMove(false);
+    }
+  }
+
+  async function handleBulkMoveBase() {
+    const ids = [...selected];
+    if (ids.length === 0 || !moveTargetBaseId) return;
+    setMoving(true);
+    const { error } = await supabase
+      .from('contacts')
+      .update({ lead_base_id: moveTargetBaseId === '__none__' ? null : moveTargetBaseId })
+      .in('id', ids);
+    setMoving(false);
+    if (error) {
+      toast.error(t('toastBulkFailedMove'));
+      return;
+    }
+    toast.success(t('toastBulkMoved', { count: ids.length }));
+    setSelected(new Set());
+    setMoveBaseOpen(false);
+    setMoveTargetBaseId('');
+    fetchContacts();
   }
 
   return (
@@ -527,6 +601,58 @@ function ContactsPageInner() {
               )}
             </PopoverContent>
           </Popover>
+
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="outline"
+                  className="border-border text-muted-foreground hover:bg-muted shrink-0"
+                />
+              }
+            >
+              <Layers className="size-4" />
+              {selectedBaseId
+                ? selectedBaseId === '__none__'
+                  ? t('filterByBaseNone')
+                  : (leadBaseNameById[selectedBaseId] ?? t('filterByBase'))
+                : t('filterByBase')}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-64 p-0">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
+                <span className="text-sm font-medium text-popover-foreground">{t('filterByBase')}</span>
+                {selectedBaseId && (
+                  <button
+                    onClick={() => selectBaseFilter('')}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    {t('clearAll')}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-64 overflow-y-auto py-1">
+                <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 hover:bg-muted/50">
+                  <Checkbox
+                    checked={selectedBaseId === '__none__'}
+                    onCheckedChange={() => selectBaseFilter('__none__')}
+                  />
+                  <span className="truncate text-sm text-popover-foreground">{t('filterByBaseNone')}</span>
+                </label>
+                {leadBases.map((base) => (
+                  <label
+                    key={base.id}
+                    className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 hover:bg-muted/50"
+                  >
+                    <Checkbox
+                      checked={selectedBaseId === base.id}
+                      onCheckedChange={() => selectBaseFilter(base.id)}
+                    />
+                    <span className="truncate text-sm text-popover-foreground">{base.name}</span>
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Active tag-filter chips */}
@@ -592,6 +718,17 @@ function ContactsPageInner() {
               {t('sendInvite')}
             </GatedButton>
             <GatedButton
+              variant="outline"
+              size="sm"
+              canAct={canEdit}
+              gateReason="move contacts"
+              onClick={() => setMoveBaseOpen(true)}
+              className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+            >
+              <FolderInput className="size-4" />
+              {t('moveToBase')}
+            </GatedButton>
+            <GatedButton
               variant="destructive"
               size="sm"
               canAct={canEdit}
@@ -622,6 +759,7 @@ function ContactsPageInner() {
               <TableHead className="text-muted-foreground">{t('tableColumns.name')}</TableHead>
               <TableHead className="text-muted-foreground">{t('tableColumns.phone')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.tags')}</TableHead>
+              <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.base')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.company')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.source')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.createdAt')}</TableHead>
@@ -631,7 +769,7 @@ function ContactsPageInner() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={9} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="size-6 animate-spin text-primary" />
                     <p className="text-sm text-muted-foreground">{t('loading')}</p>
@@ -640,7 +778,7 @@ function ContactsPageInner() {
               </TableRow>
             ) : contacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={9} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Users className="size-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
@@ -722,6 +860,15 @@ function ContactsPageInner() {
                         </span>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    {contact.lead_base_id && leadBaseNameById[contact.lead_base_id] ? (
+                      <span className="inline-flex items-center rounded-full bg-card-2 px-2 py-0.5 text-[11px] font-medium text-foreground">
+                        {leadBaseNameById[contact.lead_base_id]}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden lg:table-cell text-sm">
                     {contact.company || <span className="text-muted-foreground">-</span>}
@@ -850,6 +997,7 @@ function ContactsPageInner() {
         open={importOpen}
         onOpenChange={setImportOpen}
         onImported={fetchContacts}
+        defaultLeadBaseId={selectedBaseId && selectedBaseId !== '__none__' ? selectedBaseId : null}
       />
 
       {/* Custom Fields Manager (admin+) */}
@@ -923,6 +1071,72 @@ function ContactsPageInner() {
             >
               {deleting && <Loader2 className="size-4 animate-spin" />}
               {t('deleteBtn')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Move to Base */}
+      <Dialog
+        open={moveBaseOpen}
+        onOpenChange={(o) => {
+          setMoveBaseOpen(o);
+          if (!o) {
+            setMoveTargetBaseId('');
+            setNewBaseNameForMove('');
+          }
+        }}
+      >
+        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">{t('moveToBaseTitle')}</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t('moveToBaseDesc', { count: selected.size })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-1">
+            <select
+              value={moveTargetBaseId}
+              onChange={(e) => setMoveTargetBaseId(e.target.value)}
+              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+            >
+              <option value="">{t('selectBase')}</option>
+              <option value="__none__">{t('filterByBaseNone')}</option>
+              {leadBases.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <Input
+                value={newBaseNameForMove}
+                onChange={(e) => setNewBaseNameForMove(e.target.value)}
+                placeholder={t('newBaseNamePlaceholder')}
+                className="border-border bg-muted text-foreground"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCreateBaseForMove}
+                disabled={creatingBaseForMove || !newBaseNameForMove.trim()}
+                className="shrink-0 border-border text-muted-foreground hover:bg-muted"
+              >
+                {creatingBaseForMove ? <Loader2 className="size-4 animate-spin" /> : t('createBase')}
+              </Button>
+            </div>
+          </div>
+          <DialogFooter className="bg-popover border-border">
+            <Button
+              variant="outline"
+              onClick={() => setMoveBaseOpen(false)}
+              className="border-border text-muted-foreground hover:bg-muted"
+            >
+              {t('cancel')}
+            </Button>
+            <Button onClick={handleBulkMoveBase} disabled={moving || !moveTargetBaseId}>
+              {moving && <Loader2 className="size-4 animate-spin" />}
+              {t('moveBtn')}
             </Button>
           </DialogFooter>
         </DialogContent>
