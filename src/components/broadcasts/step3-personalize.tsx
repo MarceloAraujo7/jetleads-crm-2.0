@@ -12,8 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -233,6 +234,68 @@ export function Step3Personalize({
     ? firstContact.name || firstContact.phone
     : t('personalize.previewSample');
 
+  // Same resolution as previewText, but as an ordered params array —
+  // what /api/whatsapp/broadcast actually expects for a real send.
+  const resolvedParams = useMemo(() => {
+    const contact = firstContact ?? SAMPLE_CONTACT;
+    const customValues = firstContact ? firstContactCustomValues : new Map<string, string>();
+    return placeholders.map((placeholder) => {
+      const key = placeholder.replace(/^\{\{|\}\}$/g, '');
+      const mapping = variables[key];
+      if (!mapping) return '';
+      if (mapping.type === 'static') return mapping.value ?? '';
+      if (mapping.type === 'field') {
+        const fieldMap: Record<string, string | undefined> = {
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.email,
+          company: contact.company,
+        };
+        return fieldMap[mapping.value] ?? '';
+      }
+      return customValues.get(mapping.value) ?? '';
+    });
+  }, [placeholders, variables, firstContact, firstContactCustomValues]);
+
+  const [testPhone, setTestPhone] = useState('');
+  const [sendingTest, setSendingTest] = useState(false);
+
+  async function handleSendTest() {
+    if (!testPhone.trim()) return;
+    setSendingTest(true);
+    try {
+      const res = await fetch('/api/whatsapp/broadcast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipients: [
+            {
+              phone: testPhone.trim(),
+              params: resolvedParams,
+              ...(mediaHeaderType && headerMediaUrl.trim()
+                ? { messageParams: { headerMediaUrl: headerMediaUrl.trim() } }
+                : {}),
+            },
+          ],
+          template_name: template.name,
+          template_language: template.language ?? 'en_US',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || t('personalize.toastTestFailed'));
+      const result = data.results?.[0];
+      if (result?.status === 'sent') {
+        toast.success(t('personalize.toastTestSent'));
+      } else {
+        throw new Error(result?.error || t('personalize.toastTestFailed'));
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('personalize.toastTestFailed'));
+    } finally {
+      setSendingTest(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -447,6 +510,35 @@ export function Step3Personalize({
               </div>
             )}
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4 sm:flex-row sm:items-center">
+          <Input
+            type="tel"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            placeholder={t('personalize.testPhonePlaceholder')}
+            className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleSendTest}
+            disabled={
+              !testPhone.trim() ||
+              sendingTest ||
+              unmappedKeys.length > 0 ||
+              headerMediaError !== null
+            }
+            className="shrink-0 border-border text-foreground hover:bg-muted disabled:opacity-50"
+          >
+            {sendingTest ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            {t('personalize.sendTest')}
+          </Button>
         </div>
       </div>
 

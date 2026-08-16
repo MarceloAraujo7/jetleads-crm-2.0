@@ -952,6 +952,10 @@
         "preview": "Preview",
         "previewSample": "Showing preview with sample data.",
         "noPreview": "Preview not available.",
+        "testPhonePlaceholder": "Test send to a number (e.g. 15551234567)",
+        "sendTest": "Send test",
+        "toastTestSent": "Test message sent",
+        "toastTestFailed": "Failed to send test",
         "fieldMap": {
           "name": "Name",
           "phone": "Phone",

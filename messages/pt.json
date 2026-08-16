@@ -952,6 +952,10 @@
         "preview": "Pré-visualização",
         "previewSample": "Mostrando pré-visualização com dados de exemplo.",
         "noPreview": "Pré-visualização não disponível.",
+        "testPhonePlaceholder": "Testar envio para um número (ex: 5511999999999)",
+        "sendTest": "Enviar teste",
+        "toastTestSent": "Mensagem de teste enviada",
+        "toastTestFailed": "Falha ao enviar o teste",
         "fieldMap": {
           "name": "Nome",
           "phone": "Telefone",
