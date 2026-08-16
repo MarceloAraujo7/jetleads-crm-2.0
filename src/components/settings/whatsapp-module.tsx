@@ -1,35 +1,38 @@
 'use client';
 
-import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { MessageSquareText } from 'lucide-react';
+import { PlugZap, MessageSquareText, Zap } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
 import { WhatsAppConfig } from './whatsapp-config';
 import { EvolutionConfig } from './evolution-config';
-import { TemplateListDialog } from '@/components/whatsapp/template-list-dialog';
+import { TemplateListPanel } from '@/components/whatsapp/template-list-panel';
 import { QuickRepliesManager } from './quick-replies-manager';
 
 /**
  * WhatsApp module — everything about talking to Meta lives here now:
- * number connection, message templates, and quick replies. Used to be
- * three separate settings sections (whatsapp / templates /
- * quick-replies) that looked like near-identical "list with an inner
- * sidebar" screens; this just adds a tab strip above the three
- * existing components, unmodified — each still owns its own header,
- * data-fetching, and dialogs.
+ * number connection, message templates, and quick replies. Underline
+ * ("line") tabs instead of the segmented-pill default — this is a
+ * page-level section switch, not a toggle, so the lighter style reads
+ * more like page navigation and less like a settings control.
  */
 export function WhatsAppModule() {
   const t = useTranslations('Settings.whatsappModule');
-  const tTemplates = useTranslations('Settings.templates');
-  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   return (
     <Tabs defaultValue="connection">
-      <TabsList className="mb-5">
-        <TabsTrigger value="connection">{t('connection')}</TabsTrigger>
-        <TabsTrigger value="templates">{t('templates')}</TabsTrigger>
-        <TabsTrigger value="quickReplies">{t('quickReplies')}</TabsTrigger>
+      <TabsList variant="line" className="mb-6 w-full justify-start gap-1 border-b border-border/60 pb-0">
+        <TabsTrigger value="connection" className="gap-1.5">
+          <PlugZap className="size-4" />
+          {t('connection')}
+        </TabsTrigger>
+        <TabsTrigger value="templates" className="gap-1.5">
+          <MessageSquareText className="size-4" />
+          {t('templates')}
+        </TabsTrigger>
+        <TabsTrigger value="quickReplies" className="gap-1.5">
+          <Zap className="size-4" />
+          {t('quickReplies')}
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="connection">
@@ -40,19 +43,7 @@ export function WhatsAppModule() {
       </TabsContent>
 
       <TabsContent value="templates">
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl bg-card p-10 text-center shadow-[var(--shadow)]">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-soft text-primary">
-            <MessageSquareText className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">{tTemplates('title')}</p>
-            <p className="mt-1 max-w-sm text-xs text-muted-foreground">{tTemplates('description')}</p>
-          </div>
-          <Button onClick={() => setTemplatesOpen(true)} className="mt-1">
-            {tTemplates('list.open')}
-          </Button>
-        </div>
-        <TemplateListDialog open={templatesOpen} onOpenChange={setTemplatesOpen} />
+        <TemplateListPanel />
       </TabsContent>
 
       <TabsContent value="quickReplies">

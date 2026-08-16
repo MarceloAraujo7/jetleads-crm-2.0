@@ -1521,7 +1521,6 @@
         "PENDING_DELETION": "Deletion pending"
       },
       "list": {
-        "open": "View templates",
         "title": "Message template",
         "subtitle": "{count} {count, plural, =1 {template} other {templates}} · pick one to edit or create a new one",
         "filter": {

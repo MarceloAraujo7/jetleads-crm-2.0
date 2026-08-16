@@ -246,6 +246,15 @@ export async function POST() {
         header_type: headerType,
         header_content: header?.text ?? null,
         header_handle: header?.example?.header_handle?.[0] ?? null,
+        // Meta overloads `example.header_handle` for two different
+        // things depending on direction: on template *creation* it's
+        // an opaque Resumable-Upload session id, but on this GET
+        // response it's a fetchable (if possibly short-lived) CDN URL
+        // for the sample media — that's what the preview bubble
+        // actually needs. Without this, every image/video/document
+        // header synced from Meta rendered as a blank placeholder.
+        header_media_url:
+          headerType && headerType !== 'text' ? (header?.example?.header_handle?.[0] ?? null) : null,
         body_text: body?.text ?? '',
         footer_text: footer?.text ?? null,
         buttons: parsedButtons.length ? parsedButtons : null,

@@ -1521,7 +1521,6 @@
         "PENDING_DELETION": "Exclusão pendente"
       },
       "list": {
-        "open": "Ver modelos",
         "title": "Modelo de mensagem",
         "subtitle": "{count} {count, plural, =1 {modelo} other {modelos}} · escolha um para editar ou crie um novo",
         "filter": {
