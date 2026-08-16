@@ -118,8 +118,12 @@ function ContactsPageInner() {
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // Bulk selection (page-scoped — only the loaded rows are selectable)
+  // Bulk selection (page-scoped — only the loaded rows are selectable —
+  // unless the user expands to every row matching the current filters
+  // via `selectAllMatching`, e.g. "select this whole lead base").
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  const [selectingAllMatching, setSelectingAllMatching] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [moveBaseOpen, setMoveBaseOpen] = useState(false);
   const [moveTargetBaseId, setMoveTargetBaseId] = useState<string>('');
@@ -163,6 +167,7 @@ function ContactsPageInner() {
     // referred to the old page/search results so the bulk bar can't
     // act on rows the user can no longer see.
     setSelected(new Set());
+    setSelectAllMatching(false);
 
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -343,6 +348,7 @@ function ContactsPageInner() {
       }
       return next;
     });
+    setSelectAllMatching(false);
   }
 
   function toggleSelect(id: string) {
@@ -352,6 +358,60 @@ function ContactsPageInner() {
       else next.add(id);
       return next;
     });
+    setSelectAllMatching(false);
+  }
+
+  // "Select all N leads matching the current filters" — not just the
+  // loaded page. Fetches every matching id (paginated internally so a
+  // huge base doesn't blow a single request) rather than relying on
+  // whatever happens to be loaded, so bulk delete/move can act on an
+  // entire lead base regardless of how many pages it spans.
+  async function selectAllMatchingFilters() {
+    setSelectingAllMatching(true);
+    try {
+      const term = search.trim();
+      let ids: string[] = [];
+
+      if (selectedTagIds.length > 0) {
+        // Tag filter is resolved via the RPC (see fetchContacts) — ask
+        // for every row in one shot now that we know the true count.
+        const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
+          p_tag_ids: selectedTagIds,
+          p_search: term || null,
+          p_limit: totalCount,
+          p_offset: 0,
+        });
+        if (error) throw error;
+        ids = ((data ?? []) as { contact: Contact }[]).map((r) => r.contact.id);
+      } else {
+        const PAGE = 1000;
+        for (let from = 0; from < totalCount; from += PAGE) {
+          let query = supabase
+            .from('contacts')
+            .select('id')
+            .range(from, from + PAGE - 1);
+          if (term) {
+            const like = `%${term}%`;
+            query = query.or(`name.ilike.${like},phone.ilike.${like},email.ilike.${like}`);
+          }
+          if (selectedBaseId === '__none__') {
+            query = query.is('lead_base_id', null);
+          } else if (selectedBaseId) {
+            query = query.eq('lead_base_id', selectedBaseId);
+          }
+          const { data, error } = await query;
+          if (error) throw error;
+          ids.push(...(data ?? []).map((r) => r.id as string));
+        }
+      }
+
+      setSelected(new Set(ids));
+      setSelectAllMatching(true);
+    } catch {
+      toast.error(t('toastFailedLoad'));
+    } finally {
+      setSelectingAllMatching(false);
+    }
   }
 
   async function handleBulkDelete() {
@@ -359,9 +419,22 @@ function ContactsPageInner() {
     if (ids.length === 0) return;
     setDeleting(true);
 
-    const { error } = await supabase.from('contacts').delete().in('id', ids);
+    // Chunked — a "select all matching" delete on a large base could
+    // otherwise push .in(...) past practical request-size limits.
+    const CHUNK = 200;
+    let failed = false;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .in('id', ids.slice(i, i + CHUNK));
+      if (error) {
+        failed = true;
+        break;
+      }
+    }
 
-    if (error) {
+    if (failed) {
       toast.error(t('toastBulkFailedDelete'));
     } else {
       toast.success(t('toastBulkDeleted', { count: ids.length }));
@@ -454,12 +527,23 @@ function ContactsPageInner() {
     const ids = [...selected];
     if (ids.length === 0 || !moveTargetBaseId) return;
     setMoving(true);
-    const { error } = await supabase
-      .from('contacts')
-      .update({ lead_base_id: moveTargetBaseId === '__none__' ? null : moveTargetBaseId })
-      .in('id', ids);
+
+    const CHUNK = 200;
+    const targetId = moveTargetBaseId === '__none__' ? null : moveTargetBaseId;
+    let failed = false;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const { error } = await supabase
+        .from('contacts')
+        .update({ lead_base_id: targetId })
+        .in('id', ids.slice(i, i + CHUNK));
+      if (error) {
+        failed = true;
+        break;
+      }
+    }
+
     setMoving(false);
-    if (error) {
+    if (failed) {
       toast.error(t('toastBulkFailedMove'));
       return;
     }
@@ -693,30 +777,53 @@ function ContactsPageInner() {
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
+        <div className="space-y-2">
+          {allOnPageSelected && !selectAllMatching && totalCount > contacts.length && (
+            <div className="flex items-center justify-center gap-1.5 rounded-lg bg-primary-soft px-4 py-2 text-xs text-primary">
+              <span>{t('allOnPageSelected', { count: contacts.length })}</span>
+              <button
+                type="button"
+                onClick={selectAllMatchingFilters}
+                disabled={selectingAllMatching}
+                className="font-semibold underline hover:no-underline disabled:opacity-50"
+              >
+                {selectingAllMatching
+                  ? t('selectingAll')
+                  : t('selectAllMatching', { count: totalCount })}
+              </button>
+            </div>
+          )}
         <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/40 px-4 py-2">
           <p className="text-sm text-foreground">
-            {t('selectedCount', { count: selected.size })}
+            {selectAllMatching
+              ? t('allMatchingSelected', { count: selected.size })
+              : t('selectedCount', { count: selected.size })}
           </p>
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setSelected(new Set())}
+              onClick={() => {
+                setSelected(new Set());
+                setSelectAllMatching(false);
+              }}
               className="text-muted-foreground hover:text-foreground"
             >
               {t('clearSelection')}
             </Button>
-            <GatedButton
-              variant="outline"
-              size="sm"
-              canAct={canEdit}
-              gateReason="send broadcasts"
-              onClick={handleSendInvite}
-              className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-            >
-              <Send className="size-4" />
-              {t('sendInvite')}
-            </GatedButton>
+            {!selectAllMatching && (
+              <GatedButton
+                variant="outline"
+                size="sm"
+                canAct={canEdit}
+                gateReason="send broadcasts"
+                onClick={handleSendInvite}
+                className="border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <Send className="size-4" />
+                {t('sendInvite')}
+              </GatedButton>
+            )}
             <GatedButton
               variant="outline"
               size="sm"
@@ -739,6 +846,7 @@ function ContactsPageInner() {
               {t('deleteSelected')}
             </GatedButton>
           </div>
+        </div>
         </div>
       )}
 
