@@ -21,7 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Radio, Zap, Workflow, Bot, Loader2, Upload, UserPlus, Send, Check } from "lucide-react";
+import { Plus, Trash2, Radio, Zap, Workflow, Bot, Loader2, Upload, UserPlus, Send, Check, ArrowLeft, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { ImportModal } from "@/components/contacts/import-modal";
@@ -40,6 +40,8 @@ interface LeadBaseOption {
 }
 
 const NEW_LEAD_BASE = "__new__";
+const STEP_KEYS = ["details", "audience", "team", "actions"] as const;
+type StepKey = (typeof STEP_KEYS)[number];
 // 'manual' isn't a stored strategy value — it maps to
 // lead_bases.distribution_enabled=false, matching the account-wide
 // distribution-settings-dialog.tsx convention.
@@ -125,6 +127,43 @@ export function CampaignForm({
   const [importOpen, setImportOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  const [currentStepKey, setCurrentStepKey] = useState<StepKey>("details");
+  const hasLeadBase = leadBaseId !== "" && leadBaseId !== NEW_LEAD_BASE;
+  const steps = useMemo(
+    () =>
+      STEP_KEYS.filter((k) => k !== "team" || hasLeadBase).map((key) => ({
+        key,
+        label: t(`step${key.charAt(0).toUpperCase()}${key.slice(1)}`),
+      })),
+    [hasLeadBase, t],
+  );
+  const currentStepIndex = steps.findIndex((s) => s.key === currentStepKey);
+  const isFirstStep = currentStepIndex <= 0;
+  const isLastStep = currentStepIndex === steps.length - 1;
+
+  // "Team" only makes sense once a lead base is picked — if the user
+  // clears the base while sitting on that step, bump forward rather
+  // than stranding them on a step that just vanished from the list.
+  useEffect(() => {
+    if (currentStepKey === "team" && !hasLeadBase) {
+      setCurrentStepKey("actions");
+    }
+  }, [currentStepKey, hasLeadBase]);
+
+  function goNext() {
+    if (currentStepIndex < steps.length - 1) setCurrentStepKey(steps[currentStepIndex + 1].key);
+  }
+  function goBack() {
+    if (currentStepIndex > 0) setCurrentStepKey(steps[currentStepIndex - 1].key);
+  }
+
+  const canAdvanceFromCurrentStep =
+    currentStepKey === "details"
+      ? name.trim().length > 0
+      : currentStepKey === "audience"
+        ? leadBaseId !== NEW_LEAD_BASE
+        : true;
+
   useEffect(() => {
     if (!open) return;
     setName(campaign?.name ?? "");
@@ -141,6 +180,7 @@ export function CampaignForm({
     );
     setConfirmDelete(false);
     setNewBaseName("");
+    setCurrentStepKey("details");
     setLeadBaseId(campaign?.lead_base_id ?? "");
     if (!campaign?.lead_base_id) {
       setSelectedMemberIds(new Set());
@@ -447,95 +487,157 @@ export function CampaignForm({
             <DialogTitle className="text-popover-foreground">
               {campaign ? t("editCampaign") : t("newCampaign")}
             </DialogTitle>
+            <div className="flex items-center pt-1">
+              {steps.map((step, index) => {
+                const isActive = index === currentStepIndex;
+                const isDone = index < currentStepIndex;
+                return (
+                  <div key={step.key} className="flex flex-1 items-center last:flex-none">
+                    <button
+                      type="button"
+                      onClick={() => index < currentStepIndex && setCurrentStepKey(step.key)}
+                      disabled={index >= currentStepIndex}
+                      className="flex items-center gap-1.5 disabled:cursor-default"
+                    >
+                      <span
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-medium transition-colors ${
+                          isDone
+                            ? "bg-primary text-primary-foreground"
+                            : isActive
+                              ? "border-2 border-primary bg-primary/10 text-primary"
+                              : "border border-border bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {isDone ? <Check className="h-3 w-3" /> : index + 1}
+                      </span>
+                      <span
+                        className={`hidden text-xs font-medium sm:block ${
+                          isActive ? "text-foreground" : isDone ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    </button>
+                    {index < steps.length - 1 && (
+                      <div className={`mx-2 h-px flex-1 ${index < currentStepIndex ? "bg-primary" : "bg-muted"}`} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </DialogHeader>
 
           <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("name")}</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={t("namePlaceholder")}
-                className="border-border bg-muted text-foreground"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("leadBase")}</Label>
-              <select
-                value={leadBaseId}
-                onChange={(e) => setLeadBaseId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-              >
-                <option value="">{t("leadBaseNone")}</option>
-                {leadBases.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-                <option value={NEW_LEAD_BASE}>{t("leadBaseCreateNew")}</option>
-              </select>
-            </div>
-
-            {leadBaseId === NEW_LEAD_BASE && (
-              <div className="flex gap-2">
-                <Input
-                  value={newBaseName}
-                  onChange={(e) => setNewBaseName(e.target.value)}
-                  placeholder={t("leadBaseNamePlaceholder")}
-                  className="border-border bg-muted text-foreground"
-                />
-                <Button
-                  type="button"
-                  onClick={handleCreateBase}
-                  disabled={creatingBase || !newBaseName.trim()}
-                  className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  {creatingBase ? <Loader2 className="h-4 w-4 animate-spin" /> : t("leadBaseCreate")}
-                </Button>
-              </div>
-            )}
-
-            {!leadBaseId && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">{t("audienceLabel")}</Label>
-                  <Input
-                    value={audienceLabel}
-                    onChange={(e) => setAudienceLabel(e.target.value)}
-                    placeholder={t("audienceLabelPlaceholder")}
-                    className="border-border bg-muted text-foreground"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-muted-foreground">{t("audienceCount")}</Label>
-                  <Input
-                    type="number"
-                    value={audienceCount}
-                    onChange={(e) => setAudienceCount(e.target.value)}
-                    placeholder="0"
-                    className="border-border bg-muted text-foreground"
-                  />
-                </div>
-              </div>
-            )}
-
-            {leadBaseId && leadBaseId !== NEW_LEAD_BASE && (
+            {currentStepKey === "details" && (
               <>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    {leadBaseDetailsLoading ? t("loadingBaseDetails") : t("leadBaseContactCount", { count: liveContactCount ?? 0 })}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setImportOpen(true)}
-                    className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
-                  >
-                    <Upload className="h-3 w-3" />
-                    {t("importLeads")}
-                  </button>
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("name")}</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t("namePlaceholder")}
+                    className="border-border bg-muted text-foreground"
+                    autoFocus
+                  />
                 </div>
 
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("status")}</Label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as CampaignStatus)}
+                    className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                  >
+                    <option value="running">{t("statusRunning")}</option>
+                    <option value="scheduled">{t("statusScheduled")}</option>
+                    <option value="completed">{t("statusCompleted")}</option>
+                  </select>
+                </div>
+              </>
+            )}
+
+            {currentStepKey === "audience" && (
+              <>
+                <div className="grid gap-2">
+                  <Label className="text-muted-foreground">{t("leadBase")}</Label>
+                  <select
+                    value={leadBaseId}
+                    onChange={(e) => setLeadBaseId(e.target.value)}
+                    className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                  >
+                    <option value="">{t("leadBaseNone")}</option>
+                    {leadBases.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                    <option value={NEW_LEAD_BASE}>{t("leadBaseCreateNew")}</option>
+                  </select>
+                </div>
+
+                {leadBaseId === NEW_LEAD_BASE && (
+                  <div className="flex gap-2">
+                    <Input
+                      value={newBaseName}
+                      onChange={(e) => setNewBaseName(e.target.value)}
+                      placeholder={t("leadBaseNamePlaceholder")}
+                      className="border-border bg-muted text-foreground"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleCreateBase}
+                      disabled={creatingBase || !newBaseName.trim()}
+                      className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      {creatingBase ? <Loader2 className="h-4 w-4 animate-spin" /> : t("leadBaseCreate")}
+                    </Button>
+                  </div>
+                )}
+
+                {!leadBaseId && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-2">
+                      <Label className="text-muted-foreground">{t("audienceLabel")}</Label>
+                      <Input
+                        value={audienceLabel}
+                        onChange={(e) => setAudienceLabel(e.target.value)}
+                        placeholder={t("audienceLabelPlaceholder")}
+                        className="border-border bg-muted text-foreground"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-muted-foreground">{t("audienceCount")}</Label>
+                      <Input
+                        type="number"
+                        value={audienceCount}
+                        onChange={(e) => setAudienceCount(e.target.value)}
+                        placeholder="0"
+                        className="border-border bg-muted text-foreground"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {hasLeadBase && (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      {leadBaseDetailsLoading ? t("loadingBaseDetails") : t("leadBaseContactCount", { count: liveContactCount ?? 0 })}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setImportOpen(true)}
+                      className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                    >
+                      <Upload className="h-3 w-3" />
+                      {t("importLeads")}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {currentStepKey === "team" && hasLeadBase && (
+              <>
                 <div className="grid gap-2">
                   <div className="flex items-center justify-between">
                     <Label className="text-muted-foreground">{t("team")}</Label>
@@ -607,173 +709,181 @@ export function CampaignForm({
               </>
             )}
 
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("status")}</Label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as CampaignStatus)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
-              >
-                <option value="running">{t("statusRunning")}</option>
-                <option value="scheduled">{t("statusScheduled")}</option>
-                <option value="completed">{t("statusCompleted")}</option>
-              </select>
-            </div>
-
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-muted-foreground">{t("actions")}</Label>
-                <button
-                  type="button"
-                  onClick={addRow}
-                  disabled={optionsLoading}
-                  className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
-                >
-                  <Plus className="h-3 w-3" />
-                  {t("addAction")}
-                </button>
-              </div>
-
-              {optionsLoading ? (
-                <div className="flex items-center justify-center py-6">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            {currentStepKey === "actions" && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground">{t("actions")}</Label>
+                  <button
+                    type="button"
+                    onClick={addRow}
+                    disabled={optionsLoading}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {t("addAction")}
+                  </button>
                 </div>
-              ) : rows.length === 0 ? (
-                <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">
-                  {t("noActionsYet")}
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {rows.map((row) => {
-                    const Icon = ACTION_TYPE_ICON[row.action_type];
-                    const options = optionsForType(row.action_type);
-                    return (
-                      <div key={row.localId} className="rounded-xl bg-card-2 p-3">
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                          <select
-                            value={row.action_type}
-                            onChange={(e) =>
-                              updateRow(row.localId, {
-                                action_type: e.target.value as CampaignActionType,
-                                linkedId: "",
-                              })
-                            }
-                            className="h-8 rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
-                          >
-                            {availableTypes.map((type) => (
-                              <option key={type} value={type}>
-                                {tType(type)}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => removeRow(row.localId)}
-                            className="ml-auto text-muted-foreground hover:text-red-400"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
 
-                        <Input
-                          value={row.title}
-                          onChange={(e) => updateRow(row.localId, { title: e.target.value })}
-                          placeholder={t("actionTitlePlaceholder")}
-                          className="mt-2 h-8 border-border bg-muted text-xs text-foreground"
-                        />
+                {optionsLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                ) : rows.length === 0 ? (
+                  <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">
+                    {t("noActionsYet")}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {rows.map((row) => {
+                      const Icon = ACTION_TYPE_ICON[row.action_type];
+                      const options = optionsForType(row.action_type);
+                      return (
+                        <div key={row.localId} className="rounded-xl bg-card-2 p-3">
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                            <select
+                              value={row.action_type}
+                              onChange={(e) =>
+                                updateRow(row.localId, {
+                                  action_type: e.target.value as CampaignActionType,
+                                  linkedId: "",
+                                })
+                              }
+                              className="h-8 rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
+                            >
+                              {availableTypes.map((type) => (
+                                <option key={type} value={type}>
+                                  {tType(type)}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => removeRow(row.localId)}
+                              className="ml-auto text-muted-foreground hover:text-red-400"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
 
-                        {row.action_type === "agent" ? (
-                          <p className="mt-2 text-[11px] text-muted-foreground">
-                            {t("agentLinkedNote")}
-                          </p>
-                        ) : row.action_type === "broadcast" ? (
-                          row.linkedId ? (
-                            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                              <Check className="h-3 w-3" />
-                              {t("broadcastCreated")}
+                          <Input
+                            value={row.title}
+                            onChange={(e) => updateRow(row.localId, { title: e.target.value })}
+                            placeholder={t("actionTitlePlaceholder")}
+                            className="mt-2 h-8 border-border bg-muted text-xs text-foreground"
+                          />
+
+                          {row.action_type === "agent" ? (
+                            <p className="mt-2 text-[11px] text-muted-foreground">
+                              {t("agentLinkedNote")}
                             </p>
-                          ) : !leadBaseId || leadBaseId === NEW_LEAD_BASE ? (
-                            <p className="mt-1.5 text-[11px] text-amber-500">{t("broadcastNeedsBase")}</p>
-                          ) : (
-                            <div className="mt-2 space-y-2">
-                              <select
-                                value={row.pendingTemplateId ?? ""}
-                                onChange={(e) => updateRow(row.localId, { pendingTemplateId: e.target.value })}
-                                className="h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
-                              >
-                                <option value="">{t("selectTemplate")}</option>
-                                {approvedTemplates.map((tpl) => (
-                                  <option key={tpl.id} value={tpl.id}>
-                                    {tpl.name}
-                                  </option>
-                                ))}
-                              </select>
-                              {approvedTemplates.length === 0 && (
-                                <p className="text-[11px] text-amber-500">{t("noCompatibleTemplates")}</p>
-                              )}
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => handleCreateBroadcast(row)}
-                                disabled={!row.pendingTemplateId || creatingBroadcastFor === row.localId}
-                                className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
-                              >
-                                {creatingBroadcastFor === row.localId ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Send className="h-3.5 w-3.5" />
+                          ) : row.action_type === "broadcast" ? (
+                            row.linkedId ? (
+                              <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                                <Check className="h-3 w-3" />
+                                {t("broadcastCreated")}
+                              </p>
+                            ) : !leadBaseId || leadBaseId === NEW_LEAD_BASE ? (
+                              <p className="mt-1.5 text-[11px] text-amber-500">{t("broadcastNeedsBase")}</p>
+                            ) : (
+                              <div className="mt-2 space-y-2">
+                                <select
+                                  value={row.pendingTemplateId ?? ""}
+                                  onChange={(e) => updateRow(row.localId, { pendingTemplateId: e.target.value })}
+                                  className="h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
+                                >
+                                  <option value="">{t("selectTemplate")}</option>
+                                  {approvedTemplates.map((tpl) => (
+                                    <option key={tpl.id} value={tpl.id}>
+                                      {tpl.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                {approvedTemplates.length === 0 && (
+                                  <p className="text-[11px] text-amber-500">{t("noCompatibleTemplates")}</p>
                                 )}
-                                {t("createAndSendBroadcast")}
-                              </Button>
-                            </div>
-                          )
-                        ) : (
-                          <select
-                            value={row.linkedId}
-                            onChange={(e) => updateRow(row.localId, { linkedId: e.target.value })}
-                            className="mt-2 h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
-                          >
-                            <option value="">{t("selectEntity")}</option>
-                            {options.map((o) => (
-                              <option key={o.id} value={o.id}>
-                                {o.label}
-                              </option>
-                            ))}
-                          </select>
-                        )}
-                        {options.length === 0 && row.action_type !== "agent" && row.action_type !== "broadcast" && (
-                          <p className="mt-1.5 text-[11px] text-amber-500">
-                            {t("noEntitiesOfType", { type: tType(row.action_type) })}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => handleCreateBroadcast(row)}
+                                  disabled={!row.pendingTemplateId || creatingBroadcastFor === row.localId}
+                                  className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
+                                >
+                                  {creatingBroadcastFor === row.localId ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Send className="h-3.5 w-3.5" />
+                                  )}
+                                  {t("createAndSendBroadcast")}
+                                </Button>
+                              </div>
+                            )
+                          ) : (
+                            <select
+                              value={row.linkedId}
+                              onChange={(e) => updateRow(row.localId, { linkedId: e.target.value })}
+                              className="mt-2 h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
+                            >
+                              <option value="">{t("selectEntity")}</option>
+                              {options.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {options.length === 0 && row.action_type !== "agent" && row.action_type !== "broadcast" && (
+                            <p className="mt-1.5 text-[11px] text-amber-500">
+                              {t("noEntitiesOfType", { type: tType(row.action_type) })}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="border-t border-border/50 bg-popover/80 p-4">
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={isFirstStep ? () => onOpenChange(false) : goBack}
                 className="flex-1 border-border bg-transparent text-muted-foreground hover:bg-muted"
               >
-                {t("cancel")}
+                {isFirstStep ? (
+                  t("cancel")
+                ) : (
+                  <>
+                    <ArrowLeft className="h-4 w-4" />
+                    {t("back")}
+                  </>
+                )}
               </Button>
-              <Button
-                onClick={handleSave}
-                disabled={saving || !canSave}
-                className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                {saving ? t("saving") : campaign ? t("saveChanges") : t("createCampaign")}
-              </Button>
+              {isLastStep ? (
+                <Button
+                  onClick={handleSave}
+                  disabled={saving || !canSave}
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {saving ? t("saving") : campaign ? t("saveChanges") : t("createCampaign")}
+                </Button>
+              ) : (
+                <Button
+                  onClick={goNext}
+                  disabled={!canAdvanceFromCurrentStep}
+                  className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {t("next")}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
             </div>
 
-            {campaign &&
+            {isLastStep &&
+              campaign &&
               (confirmDelete ? (
                 <div className="mt-3 flex items-center justify-between gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs">
                   <span className="text-red-300">{t("deletePrompt")}</span>

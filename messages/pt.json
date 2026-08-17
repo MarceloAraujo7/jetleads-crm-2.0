@@ -662,6 +662,12 @@
     "form": {
       "newCampaign": "Nova campanha",
       "editCampaign": "Editar campanha",
+      "stepDetails": "Detalhes",
+      "stepAudience": "Base de leads",
+      "stepTeam": "Equipe",
+      "stepActions": "Ações",
+      "next": "Próximo",
+      "back": "Voltar",
       "name": "Nome",
       "namePlaceholder": "Ex: Loja Centro · SP",
       "leadBase": "Base de leads",

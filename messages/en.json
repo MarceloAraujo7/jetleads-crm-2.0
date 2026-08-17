@@ -662,6 +662,12 @@
     "form": {
       "newCampaign": "New campaign",
       "editCampaign": "Edit campaign",
+      "stepDetails": "Details",
+      "stepAudience": "Lead base",
+      "stepTeam": "Team",
+      "stepActions": "Actions",
+      "next": "Next",
+      "back": "Back",
       "name": "Name",
       "namePlaceholder": "e.g. Downtown Store · SP",
       "leadBase": "Lead base",
