@@ -420,6 +420,11 @@ export interface Broadcast {
   scheduled_at?: string;
   /** Which whatsapp_channels row this campaign sends from. Null = account default. */
   channel_id: string | null;
+  /** Media-header override used at send time (migration 051) — lets a
+   *  "retry failed" reuse the exact same image/video/document the
+   *  original send used, instead of falling back to whatever the
+   *  template's own stored header_media_url happens to be right now. */
+  header_media_url?: string | null;
   status: BroadcastStatus;
   total_recipients: number;
   sent_count: number;

@@ -445,9 +445,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
    * progress range.
    *
    * `headerMediaUrl` is the wizard's upload/paste override for a
-   * media-header template; a retry has no persisted per-send value to
-   * reapply, so it passes undefined and the send falls back to the
-   * template's own stored `header_media_url` server-side.
+   * media-header template (persisted on `broadcasts.header_media_url`
+   * so a retry can reapply the exact same one); undefined falls back
+   * to the template's own stored `header_media_url` server-side.
    */
   async function sendRecipientBatches(
     supabase: ReturnType<typeof createClient>,
@@ -644,7 +644,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         templateRow as unknown as MessageTemplate,
         (broadcast.template_variables ?? {}) as Record<string, VariableMapping>,
         broadcast.channel_id,
-        undefined,
+        (broadcast.header_media_url as string | null | undefined) ?? undefined,
         (fraction) => setProgress(10 + Math.round(fraction * 85)),
       );
 
@@ -712,6 +712,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             leadBaseId: payload.audience.leadBaseId,
           },
           channel_id: payload.channelId || null,
+          header_media_url: payload.headerMediaUrl?.trim() || null,
           campaign_kind: payload.campaignKind || null,
           status: 'sending',
           total_recipients: contacts.length,
