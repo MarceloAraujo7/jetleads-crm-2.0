@@ -16,16 +16,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from '@/components/ui/dropdown-menu';
-import {
   Layers,
   Users,
   Plus,
-  MoreHorizontal,
   Pencil,
   Trash2,
   Loader2,
@@ -226,42 +219,34 @@ export function LeadBaseGallery({
                     {base.client_name || t('noClient')}
                   </p>
                 </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger
-                    render={
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    }
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    title={t('editAction')}
+                    aria-label={t('editAction')}
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditDialog(base);
+                    }}
                   >
-                    <MoreHorizontal className="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-popover border-border">
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEditDialog(base);
-                      }}
-                      className="text-popover-foreground focus:bg-muted focus:text-foreground"
-                    >
-                      <Pencil className="size-4" />
-                      {t('editAction')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      variant="destructive"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(base);
-                      }}
-                    >
-                      <Trash2 className="size-4" />
-                      {t('deleteAction')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                    <Pencil className="size-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    title={t('deleteAction')}
+                    aria-label={t('deleteAction')}
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(base);
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
