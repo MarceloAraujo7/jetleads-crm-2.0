@@ -40,8 +40,16 @@ interface LeadBaseOption {
 }
 
 const NEW_LEAD_BASE = "__new__";
-const STEP_KEYS = ["details", "audience", "team", "actions"] as const;
+const STEP_KEYS = ["details", "audience", "team", "broadcast", "flow", "actions"] as const;
 type StepKey = (typeof STEP_KEYS)[number];
+const STEP_LABEL_KEY: Record<StepKey, string> = {
+  details: "stepDetails",
+  audience: "stepAudience",
+  team: "stepTeam",
+  broadcast: "stepBroadcast",
+  flow: "stepFlow",
+  actions: "stepActions",
+};
 // 'manual' isn't a stored strategy value — it maps to
 // lead_bases.distribution_enabled=false, matching the account-wide
 // distribution-settings-dialog.tsx convention.
@@ -133,7 +141,7 @@ export function CampaignForm({
     () =>
       STEP_KEYS.filter((k) => k !== "team" || hasLeadBase).map((key) => ({
         key,
-        label: t(`step${key.charAt(0).toUpperCase()}${key.slice(1)}`),
+        label: t(STEP_LABEL_KEY[key]),
       })),
     [hasLeadBase, t],
   );
@@ -355,8 +363,11 @@ export function CampaignForm({
     }
   }
 
+  // "Disparo" and "Agente de IA" each have their own dedicated step now
+  // (added to the wizard alongside Base de leads/Equipe) — this list is
+  // only for the catch-all "Outras ações" step's per-row type picker.
   const availableTypes = useMemo<CampaignActionType[]>(() => {
-    const types: CampaignActionType[] = ["broadcast", "automation", "flow"];
+    const types: CampaignActionType[] = ["automation"];
     if (aiConfigId) types.push("agent");
     return types;
   }, [aiConfigId]);
@@ -365,13 +376,23 @@ export function CampaignForm({
     setRows((prev) => prev.map((r) => (r.localId === localId ? { ...r, ...patch } : r)));
   }
 
-  function addRow() {
-    setRows((prev) => [...prev, newRow(availableTypes[0] ?? "broadcast")]);
+  function addRow(type: CampaignActionType) {
+    setRows((prev) => [...prev, newRow(type)]);
   }
 
   function removeRow(localId: string) {
     setRows((prev) => prev.filter((r) => r.localId !== localId));
   }
+
+  // Rows are grouped into steps by action_type — Disparo and Agente de
+  // IA (Fluxo) get their own dedicated steps; automation/agent share
+  // the catch-all "Outras ações" step.
+  const broadcastRows = useMemo(() => rows.filter((r) => r.action_type === "broadcast"), [rows]);
+  const flowRows = useMemo(() => rows.filter((r) => r.action_type === "flow"), [rows]);
+  const otherRows = useMemo(
+    () => rows.filter((r) => r.action_type === "automation" || r.action_type === "agent"),
+    [rows],
+  );
 
   const canSave =
     name.trim().length > 0 &&
@@ -709,13 +730,167 @@ export function CampaignForm({
               </>
             )}
 
+            {currentStepKey === "broadcast" && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground">{t("stepBroadcast")}</Label>
+                  <button
+                    type="button"
+                    onClick={() => addRow("broadcast")}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {t("addBroadcast")}
+                  </button>
+                </div>
+
+                {broadcastRows.length === 0 ? (
+                  <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">
+                    {t("noBroadcastYet")}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {broadcastRows.map((row) => (
+                      <div key={row.localId} className="rounded-xl bg-card-2 p-3">
+                        <div className="flex items-center gap-2">
+                          <Radio className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="text-xs font-medium text-foreground">{tType("broadcast")}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeRow(row.localId)}
+                            className="ml-auto text-muted-foreground hover:text-red-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        <Input
+                          value={row.title}
+                          onChange={(e) => updateRow(row.localId, { title: e.target.value })}
+                          placeholder={t("actionTitlePlaceholder")}
+                          className="mt-2 h-8 border-border bg-muted text-xs text-foreground"
+                        />
+
+                        {row.linkedId ? (
+                          <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+                            <Check className="h-3 w-3" />
+                            {t("broadcastCreated")}
+                          </p>
+                        ) : !leadBaseId || leadBaseId === NEW_LEAD_BASE ? (
+                          <p className="mt-1.5 text-[11px] text-amber-500">{t("broadcastNeedsBase")}</p>
+                        ) : (
+                          <div className="mt-2 space-y-2">
+                            <select
+                              value={row.pendingTemplateId ?? ""}
+                              onChange={(e) => updateRow(row.localId, { pendingTemplateId: e.target.value })}
+                              className="h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
+                            >
+                              <option value="">{t("selectTemplate")}</option>
+                              {approvedTemplates.map((tpl) => (
+                                <option key={tpl.id} value={tpl.id}>
+                                  {tpl.name}
+                                </option>
+                              ))}
+                            </select>
+                            {approvedTemplates.length === 0 && (
+                              <p className="text-[11px] text-amber-500">{t("noCompatibleTemplates")}</p>
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => handleCreateBroadcast(row)}
+                              disabled={!row.pendingTemplateId || creatingBroadcastFor === row.localId}
+                              className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
+                            >
+                              {creatingBroadcastFor === row.localId ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                              {t("createAndSendBroadcast")}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {currentStepKey === "flow" && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground">{t("stepFlow")}</Label>
+                  <button
+                    type="button"
+                    onClick={() => addRow("flow")}
+                    className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80"
+                  >
+                    <Plus className="h-3 w-3" />
+                    {t("addFlow")}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">{t("flowStepHint")}</p>
+
+                {flowRows.length === 0 ? (
+                  <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">
+                    {t("noFlowYet")}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {flowRows.map((row) => (
+                      <div key={row.localId} className="rounded-xl bg-card-2 p-3">
+                        <div className="flex items-center gap-2">
+                          <Workflow className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                          <span className="text-xs font-medium text-foreground">{tType("flow")}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeRow(row.localId)}
+                            className="ml-auto text-muted-foreground hover:text-red-400"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        <Input
+                          value={row.title}
+                          onChange={(e) => updateRow(row.localId, { title: e.target.value })}
+                          placeholder={t("actionTitlePlaceholder")}
+                          className="mt-2 h-8 border-border bg-muted text-xs text-foreground"
+                        />
+
+                        <select
+                          value={row.linkedId}
+                          onChange={(e) => updateRow(row.localId, { linkedId: e.target.value })}
+                          className="mt-2 h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
+                        >
+                          <option value="">{t("selectEntity")}</option>
+                          {flows.map((f) => (
+                            <option key={f.id} value={f.id}>
+                              {f.label}
+                            </option>
+                          ))}
+                        </select>
+                        {flows.length === 0 && (
+                          <p className="mt-1.5 text-[11px] text-amber-500">
+                            {t("noEntitiesOfType", { type: tType("flow") })}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {currentStepKey === "actions" && (
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
                   <Label className="text-muted-foreground">{t("actions")}</Label>
                   <button
                     type="button"
-                    onClick={addRow}
+                    onClick={() => addRow(availableTypes[0] ?? "automation")}
                     disabled={optionsLoading}
                     className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 disabled:opacity-50"
                   >
@@ -728,13 +903,13 @@ export function CampaignForm({
                   <div className="flex items-center justify-center py-6">
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   </div>
-                ) : rows.length === 0 ? (
+                ) : otherRows.length === 0 ? (
                   <p className="rounded-xl bg-card-2 px-3 py-3 text-xs text-muted-foreground">
                     {t("noActionsYet")}
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {rows.map((row) => {
+                    {otherRows.map((row) => {
                       const Icon = ACTION_TYPE_ICON[row.action_type];
                       const options = optionsForType(row.action_type);
                       return (
@@ -777,47 +952,6 @@ export function CampaignForm({
                             <p className="mt-2 text-[11px] text-muted-foreground">
                               {t("agentLinkedNote")}
                             </p>
-                          ) : row.action_type === "broadcast" ? (
-                            row.linkedId ? (
-                              <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-primary">
-                                <Check className="h-3 w-3" />
-                                {t("broadcastCreated")}
-                              </p>
-                            ) : !leadBaseId || leadBaseId === NEW_LEAD_BASE ? (
-                              <p className="mt-1.5 text-[11px] text-amber-500">{t("broadcastNeedsBase")}</p>
-                            ) : (
-                              <div className="mt-2 space-y-2">
-                                <select
-                                  value={row.pendingTemplateId ?? ""}
-                                  onChange={(e) => updateRow(row.localId, { pendingTemplateId: e.target.value })}
-                                  className="h-8 w-full rounded-lg border border-border bg-muted px-2 text-xs text-foreground outline-none focus:border-primary"
-                                >
-                                  <option value="">{t("selectTemplate")}</option>
-                                  {approvedTemplates.map((tpl) => (
-                                    <option key={tpl.id} value={tpl.id}>
-                                      {tpl.name}
-                                    </option>
-                                  ))}
-                                </select>
-                                {approvedTemplates.length === 0 && (
-                                  <p className="text-[11px] text-amber-500">{t("noCompatibleTemplates")}</p>
-                                )}
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => handleCreateBroadcast(row)}
-                                  disabled={!row.pendingTemplateId || creatingBroadcastFor === row.localId}
-                                  className="h-8 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
-                                >
-                                  {creatingBroadcastFor === row.localId ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <Send className="h-3.5 w-3.5" />
-                                  )}
-                                  {t("createAndSendBroadcast")}
-                                </Button>
-                              </div>
-                            )
                           ) : (
                             <select
                               value={row.linkedId}
@@ -832,7 +966,7 @@ export function CampaignForm({
                               ))}
                             </select>
                           )}
-                          {options.length === 0 && row.action_type !== "agent" && row.action_type !== "broadcast" && (
+                          {options.length === 0 && row.action_type !== "agent" && (
                             <p className="mt-1.5 text-[11px] text-amber-500">
                               {t("noEntitiesOfType", { type: tType(row.action_type) })}
                             </p>
