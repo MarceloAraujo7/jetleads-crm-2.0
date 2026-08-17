@@ -94,7 +94,8 @@ export function EvolutionConfig() {
             WhatsApp — Conversa (Evolution)
           </CardTitle>
           <CardDescription>
-            Canal complementar para conversa livre no Inbox, sem limite de janela de 24h.
+            Conecte seu WhatsApp pessoal para conversar livremente no Inbox, sem limite de janela
+            de 24h. Cada vendedor conecta o próprio número — as conversas ficam só com você.
             Campanhas continuam sempre pela API Oficial acima.
           </CardDescription>
         </div>

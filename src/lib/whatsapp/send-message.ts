@@ -276,8 +276,23 @@ export async function sendMessageToConversation(
     ? (channels.find((c) => c.id === conversation.channel_id && c.provider === 'meta_cloud') ??
       (await resolveChannel(db, accountId, { phoneForDdd: contact.phone })))
     : await resolveChannel(db, accountId, { phoneForDdd: contact.phone });
+  // Evolution channels are now agent-owned (one connection per
+  // seller, not one shared account-wide connection) — prefer, in
+  // order: (1) the channel this conversation is already anchored to,
+  // (2) the owning agent's own connected number, (3) an unclaimed/
+  // legacy shared connection, (4) any other connected one. Falling
+  // back this far keeps a message sendable even when the "right"
+  // agent's number happens to be offline, rather than hard-failing.
+  const connectedEvolution = channels.filter(
+    (c) => c.provider === 'evolution' && c.status === 'connected',
+  );
   const evolutionConfig =
-    channels.find((c) => c.provider === 'evolution' && c.status === 'connected') ??
+    connectedEvolution.find((c) => c.id === conversation.channel_id) ??
+    (conversation.assigned_agent_id
+      ? connectedEvolution.find((c) => c.assigned_agent_id === conversation.assigned_agent_id)
+      : undefined) ??
+    connectedEvolution.find((c) => !c.assigned_agent_id) ??
+    connectedEvolution[0] ??
     null;
 
   // Routing: templates and interactive (buttons/list) messages are a

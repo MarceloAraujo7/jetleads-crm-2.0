@@ -169,10 +169,20 @@ async function processEvolutionEvent(body: EvolutionWebhookBody, channel: any) {
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
   if (contactOutcome.wasCreated) {
-    void maybeDistributeNewLead(supabaseAdmin(), accountId, contactRecord.id)
+    // channelId lets the distribution shortcut fire when this arrived on
+    // a seller's own connected number: assign straight to them, no
+    // pooling needed — the number IS the distribution (see assign-lead.ts).
+    void maybeDistributeNewLead(supabaseAdmin(), accountId, contactRecord.id, {
+      channelId: channel.id,
+    })
   }
 
-  const convResult = await findOrCreateConversation(accountId, configOwnerUserId, contactRecord.id)
+  const convResult = await findOrCreateConversation(
+    accountId,
+    configOwnerUserId,
+    contactRecord.id,
+    channel.id,
+  )
   if (!convResult) return
   const conversation = convResult.conversation
 
@@ -321,6 +331,7 @@ async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  channelId: string,
 ) {
   const { data: existingRows, error: findError } = await supabaseAdmin()
     .from('conversations')
@@ -345,6 +356,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      channel_id: channelId,
       status: 'open',
       unread_count: 0,
     })

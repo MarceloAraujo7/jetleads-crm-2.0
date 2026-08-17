@@ -25,19 +25,23 @@ async function resolveAccountId(
   return data.account_id as string
 }
 
-function instanceNameFor(accountId: string): string {
+function instanceNameFor(accountId: string, userId: string): string {
   // Evolution instance names are shared global namespace on the
   // server — prefix so ours don't collide with other Jetleads
-  // products using the same Evolution instance.
-  return `jetleads-crm-${accountId.slice(0, 8)}`
+  // products using the same Evolution instance. The user slice makes
+  // each seller's instance unique within the account (one connection
+  // per person, not one shared connection for the whole team).
+  return `jetleads-crm-${accountId.slice(0, 8)}-${userId.slice(0, 8)}`
 }
 
 /**
  * GET /api/whatsapp/evolution/config
  *
- * Returns the current Evolution channel state for the account,
- * live-refreshed against the Evolution server so the UI reflects
- * whether pairing actually completed (not just what we last wrote).
+ * Returns the CALLER's OWN Evolution channel state — each seller
+ * connects and manages their own personal WhatsApp, not a shared
+ * account-wide one — live-refreshed against the Evolution server so
+ * the UI reflects whether pairing actually completed (not just what
+ * we last wrote).
  */
 export async function GET() {
   try {
@@ -63,6 +67,7 @@ export async function GET() {
       .select('*')
       .eq('account_id', accountId)
       .eq('provider', 'evolution')
+      .eq('assigned_agent_id', user.id)
       .maybeSingle()
 
     if (!channel) {
@@ -115,7 +120,7 @@ export async function GET() {
 /**
  * POST /api/whatsapp/evolution/config
  *
- * Creates (or reconnects) this account's Evolution instance and
+ * Creates (or reconnects) the CALLER's OWN Evolution instance and
  * returns a fresh QR code for the settings UI to render. Idempotent —
  * calling it again on an already-connecting instance just fetches a
  * new QR.
@@ -151,9 +156,10 @@ export async function POST() {
       .select('*')
       .eq('account_id', accountId)
       .eq('provider', 'evolution')
+      .eq('assigned_agent_id', user.id)
       .maybeSingle()
 
-    const instanceName = existing?.evolution_instance_name ?? instanceNameFor(accountId)
+    const instanceName = existing?.evolution_instance_name ?? instanceNameFor(accountId, user.id)
     const webhookSecret =
       existing?.evolution_webhook_secret ?? crypto.randomUUID().replace(/-/g, '')
     const webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? ''}/api/whatsapp/evolution-webhook?token=${webhookSecret}`
@@ -202,6 +208,7 @@ export async function POST() {
     const row = {
       account_id: accountId,
       user_id: user.id,
+      assigned_agent_id: user.id,
       provider: 'evolution' as const,
       status: 'disconnected',
       evolution_instance_name: instanceName,
@@ -228,7 +235,11 @@ export async function POST() {
 /**
  * DELETE /api/whatsapp/evolution/config
  *
- * Disconnects and tears down the account's Evolution instance.
+ * Disconnects and tears down the CALLER's OWN Evolution instance
+ * only. Scoped to `assigned_agent_id = user.id` on both the lookup
+ * and the delete itself — without that, an account with several
+ * sellers' connections would have one agent's "disconnect" wipe every
+ * teammate's row (they all share account_id + provider).
  */
 export async function DELETE() {
   try {
@@ -254,6 +265,7 @@ export async function DELETE() {
       .select('*')
       .eq('account_id', accountId)
       .eq('provider', 'evolution')
+      .eq('assigned_agent_id', user.id)
       .maybeSingle()
 
     if (existing && EVOLUTION_BASE_URL) {
@@ -273,6 +285,7 @@ export async function DELETE() {
       .delete()
       .eq('account_id', accountId)
       .eq('provider', 'evolution')
+      .eq('assigned_agent_id', user.id)
 
     if (deleteError) {
       return NextResponse.json({ error: 'Failed to disconnect' }, { status: 500 })
