@@ -29,6 +29,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Upload,
   FileText,
@@ -40,6 +41,8 @@ import {
   Download,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+
+const NEW_LEAD_BASE = '__new__';
 
 const DEFAULT_TAG_COLOR = '#3b82f6';
 const PREVIEW_LIMIT = 5;
@@ -185,10 +188,15 @@ export function ImportModal({
 
   const [leadBases, setLeadBases] = useState<LeadBaseOption[]>([]);
   const [leadBaseId, setLeadBaseId] = useState<string>(defaultLeadBaseId ?? '');
+  const [newBaseName, setNewBaseName] = useState('');
+  const [newBaseClient, setNewBaseClient] = useState('');
+  const [creatingBase, setCreatingBase] = useState(false);
 
   useEffect(() => {
     if (!open || !accountId) return;
     setLeadBaseId(defaultLeadBaseId ?? '');
+    setNewBaseName('');
+    setNewBaseClient('');
     if (lockLeadBase) return;
     (async () => {
       const { data } = await supabase
@@ -198,6 +206,31 @@ export function ImportModal({
       setLeadBases(data ?? []);
     })();
   }, [open, accountId, defaultLeadBaseId, lockLeadBase, supabase]);
+
+  async function handleCreateBase() {
+    if (!accountId || !newBaseName.trim() || creatingBase) return;
+    setCreatingBase(true);
+    try {
+      const { data, error } = await supabase
+        .from('lead_bases')
+        .insert({
+          account_id: accountId,
+          name: newBaseName.trim(),
+          client_name: newBaseClient.trim() || null,
+        })
+        .select('id, name')
+        .single();
+      if (error) throw error;
+      setLeadBases((prev) => [{ id: data.id, name: data.name }, ...prev]);
+      setLeadBaseId(data.id);
+      setNewBaseName('');
+      setNewBaseClient('');
+    } catch {
+      toast.error(t('toastFailedCreateBase'));
+    } finally {
+      setCreatingBase(false);
+    }
+  }
 
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedContactRow[]>([]);
@@ -281,7 +314,7 @@ export function ImportModal({
   }
 
   async function handleImport() {
-    if (parsedRows.length === 0) return;
+    if (parsedRows.length === 0 || leadBaseId === NEW_LEAD_BASE) return;
     setImporting(true);
 
     try {
@@ -528,7 +561,33 @@ export function ImportModal({
                     {b.name}
                   </option>
                 ))}
+                <option value={NEW_LEAD_BASE}>{t('leadBaseCreateNew')}</option>
               </select>
+              {leadBaseId === NEW_LEAD_BASE && (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={newBaseName}
+                    onChange={(e) => setNewBaseName(e.target.value)}
+                    placeholder={t('leadBaseNamePlaceholder')}
+                    className="border-border bg-muted text-foreground"
+                  />
+                  <Input
+                    value={newBaseClient}
+                    onChange={(e) => setNewBaseClient(e.target.value)}
+                    placeholder={t('leadBaseClientPlaceholder')}
+                    className="border-border bg-muted text-foreground"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleCreateBase}
+                    disabled={creatingBase || !newBaseName.trim()}
+                    className="col-span-2 border-border text-muted-foreground hover:bg-muted"
+                  >
+                    {creatingBase ? <Loader2 className="size-4 animate-spin" /> : t('leadBaseCreate')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -730,7 +789,7 @@ export function ImportModal({
           {!result && (
             <Button
               type="button"
-              disabled={parsedRows.length === 0 || importing}
+              disabled={parsedRows.length === 0 || importing || leadBaseId === NEW_LEAD_BASE}
               onClick={handleImport}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >

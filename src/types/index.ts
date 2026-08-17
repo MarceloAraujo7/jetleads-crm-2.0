@@ -712,6 +712,9 @@ export interface LeadBase {
   account_id: string;
   name: string;
   description?: string | null;
+  /** Which client/dealership these leads were bought for — distinct
+   *  from the base's own name (migration 049). */
+  client_name?: string | null;
   distribution_enabled: boolean;
   distribution_strategy: LeadDistributionStrategy;
   distribution_cursor?: string | null;
