@@ -22,7 +22,7 @@ const steps = [
 ] as const;
 
 type AudienceState = {
-  type: 'all' | 'tags' | 'custom_field' | 'csv';
+  type: 'all' | 'tags' | 'custom_field' | 'csv' | 'lead_base';
   tagIds?: string[];
   customField?: {
     fieldId: string;
@@ -31,6 +31,7 @@ type AudienceState = {
   };
   csvContacts?: { phone: string; name?: string }[];
   excludeTagIds?: string[];
+  leadBaseId?: string;
 };
 
 const INVITE_PREFILL_KEY = 'broadcast-invite-prefill';
@@ -99,6 +100,7 @@ export default function NewBroadcastPage() {
           customField: audience.customField,
           csvContacts: audience.csvContacts,
           excludeTagIds: audience.excludeTagIds,
+          leadBaseId: audience.leadBaseId,
         },
         variables,
         headerMediaUrl,

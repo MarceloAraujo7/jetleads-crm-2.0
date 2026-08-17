@@ -28,6 +28,7 @@ interface AudienceConfig {
   type: string;
   tagIds?: string[];
   csvContacts?: { phone: string; name?: string }[];
+  leadBaseId?: string;
 }
 
 interface ChannelOption {
@@ -110,6 +111,12 @@ export function Step4ScheduleSend({
           setEstimatedReach(uniqueIds.size);
         } else if (audience.type === 'csv' && audience.csvContacts) {
           setEstimatedReach(audience.csvContacts.length);
+        } else if (audience.type === 'lead_base' && audience.leadBaseId) {
+          const { count } = await supabase
+            .from('contacts')
+            .select('*', { count: 'exact', head: true })
+            .eq('lead_base_id', audience.leadBaseId);
+          setEstimatedReach(count ?? 0);
         } else {
           setEstimatedReach(0);
         }
@@ -128,7 +135,9 @@ export function Step4ScheduleSend({
         ? t('scheduleSend.audienceTags')
         : audience.type === 'csv'
           ? t('scheduleSend.audienceCsv')
-          : t('scheduleSend.audienceField');
+          : audience.type === 'lead_base'
+            ? t('scheduleSend.audienceLeadBase')
+            : t('scheduleSend.audienceField');
 
   return (
     <div className="space-y-6">

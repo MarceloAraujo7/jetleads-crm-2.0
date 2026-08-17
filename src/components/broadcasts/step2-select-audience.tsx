@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   X,
   FileText,
+  Layers,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -34,7 +35,7 @@ async function readCsvFile(file: File): Promise<string> {
   return utf8;
 }
 
-type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
+type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv' | 'lead_base';
 type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
 interface CustomFieldFilter {
@@ -49,6 +50,7 @@ interface AudienceConfig {
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
   excludeTagIds?: string[];
+  leadBaseId?: string;
 }
 
 interface Step2Props {
@@ -85,6 +87,12 @@ export function Step2SelectAudience({
       icon: Users,
     },
     {
+      type: 'lead_base',
+      label: t('selectAudience.method.leadBase'),
+      description: t('selectAudience.leadBaseDesc'),
+      icon: Layers,
+    },
+    {
       type: 'tags',
       label: t('selectAudience.method.tags'),
       description: t('selectAudience.tagDesc'),
@@ -105,6 +113,8 @@ export function Step2SelectAudience({
   ], [t]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [leadBases, setLeadBases] = useState<{ id: string; name: string }[]>([]);
+  const [loadingLeadBases, setLoadingLeadBases] = useState(false);
   const [loadingTags, setLoadingTags] = useState(false);
   const [loadingFields, setLoadingFields] = useState(false);
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null);
@@ -156,6 +166,22 @@ export function Step2SelectAudience({
     }
     fetchTags();
   }, []);
+
+  // Lazy-load lead bases only when that audience type is active.
+  useEffect(() => {
+    if (audience.type !== 'lead_base') return;
+    async function fetchLeadBases() {
+      setLoadingLeadBases(true);
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.from('lead_bases').select('id, name').order('name');
+        setLeadBases(data ?? []);
+      } finally {
+        setLoadingLeadBases(false);
+      }
+    }
+    fetchLeadBases();
+  }, [audience.type]);
 
   // Lazy-load custom fields only when that audience type is active.
   useEffect(() => {
@@ -218,6 +244,12 @@ export function Step2SelectAudience({
       ) {
         setEstimatedCount(audience.csvContacts.length);
         return;
+      } else if (audience.type === 'lead_base' && audience.leadBaseId) {
+        const { data } = await supabase
+          .from('contacts')
+          .select('id')
+          .eq('lead_base_id', audience.leadBaseId);
+        baseIds = new Set((data ?? []).map((r) => r.id));
       } else {
         // Partially-configured audience — wait for the user to finish.
         setEstimatedCount(null);
@@ -256,6 +288,7 @@ export function Step2SelectAudience({
     audience.customField,
     audience.csvContacts,
     audience.excludeTagIds,
+    audience.leadBaseId,
   ]);
 
   useEffect(() => {
@@ -295,7 +328,8 @@ export function Step2SelectAudience({
       audience.customField.value.length > 0) ||
     (audience.type === 'csv' &&
       audience.csvContacts &&
-      audience.csvContacts.length > 0);
+      audience.csvContacts.length > 0) ||
+    (audience.type === 'lead_base' && !!audience.leadBaseId);
 
   return (
     <div className="space-y-6">
@@ -326,6 +360,8 @@ export function Step2SelectAudience({
                       : undefined,
                   csvContacts:
                     option.type === 'csv' ? audience.csvContacts : undefined,
+                  leadBaseId:
+                    option.type === 'lead_base' ? audience.leadBaseId : undefined,
                 })
               }
               className={`flex items-start gap-3 rounded-xl border p-4 text-left transition-all ${
@@ -386,6 +422,32 @@ export function Step2SelectAudience({
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
+
+      {audience.type === 'lead_base' && (
+        <div className="rounded-xl border border-border bg-card/50 p-4">
+          <p className="mb-3 text-sm font-medium text-foreground">{t('selectAudience.selectLeadBase')}</p>
+          {loadingLeadBases ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : leadBases.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t('selectAudience.noLeadBasesFound')}
+            </p>
+          ) : (
+            <select
+              value={audience.leadBaseId ?? ''}
+              onChange={(e) => onUpdate({ ...audience, leadBaseId: e.target.value || undefined })}
+              className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            >
+              <option value="">{t('selectAudience.selectLeadBasePlaceholder')}</option>
+              {leadBases.map((base) => (
+                <option key={base.id} value={base.id}>
+                  {base.name}
+                </option>
+              ))}
+            </select>
           )}
         </div>
       )}
