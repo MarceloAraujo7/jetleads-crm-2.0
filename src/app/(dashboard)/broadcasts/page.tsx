@@ -5,15 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Radio, Plus, Loader2 } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Radio, Plus, Loader2, Users, CheckCheck, Eye, MessageCircle } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
@@ -62,32 +55,6 @@ function KpiCard({
           />
         </div>
       )}
-    </div>
-  );
-}
-
-function RateCell({
-  value,
-  total,
-  color,
-}: {
-  value: number;
-  total: number;
-  /** Tailwind bg class for the fill, e.g. "bg-primary" */
-  color: string;
-}) {
-  const pct = percent(value, total);
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
-        {pct}%
-      </span>
-      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
-        <div
-          className={`h-1.5 rounded-full ${color}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
     </div>
   );
 }
@@ -312,84 +279,77 @@ export default function BroadcastsPage() {
               pct={percent(totals.replied, totals.sent)}
             />
           </div>
-        <div className="overflow-x-auto rounded-2xl border border-border bg-card shadow-[var(--shadow)]">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-muted-foreground">{t('table.name')}</TableHead>
-                <TableHead className="hidden text-muted-foreground md:table-cell">{t('table.template')}</TableHead>
-                <TableHead className="hidden text-right text-muted-foreground sm:table-cell">
-                  {t('table.recipients')}
-                </TableHead>
-                <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.delivery')}</TableHead>
-                <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.read')}</TableHead>
-                {showChannelColumn && (
-                  <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.channel')}</TableHead>
-                )}
-                <TableHead className="text-muted-foreground">{t('table.status')}</TableHead>
-                <TableHead className="hidden text-muted-foreground sm:table-cell">{t('table.date')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {broadcasts.map((broadcast) => {
-                const status = getBroadcastStatus(broadcast.status);
-                return (
-                  <TableRow
-                    key={broadcast.id}
-                    className="cursor-pointer"
-                    onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
-                  >
-                    <TableCell className="font-medium text-foreground">
-                      {broadcast.name}
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {broadcasts.map((broadcast) => {
+            const status = getBroadcastStatus(broadcast.status);
+            return (
+              <Card
+                key={broadcast.id}
+                className="cursor-pointer transition-shadow hover:shadow-md"
+                onClick={() => router.push(`/broadcasts/${broadcast.id}`)}
+              >
+                <CardHeader className="flex-row items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <CardTitle className="truncate">{broadcast.name}</CardTitle>
+                    <p className="truncate text-xs text-muted-foreground">
                       {broadcast.template_name}
-                    </TableCell>
-                    <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
-                      {broadcast.total_recipients}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <RateCell
-                        value={broadcast.delivered_count}
-                        total={broadcast.total_recipients}
-                        color="bg-primary"
-                      />
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <RateCell
-                        value={broadcast.read_count}
-                        total={broadcast.total_recipients}
-                        color="bg-blue-500"
-                      />
-                    </TableCell>
-                    {showChannelColumn && (
-                      <TableCell className="hidden text-muted-foreground lg:table-cell">
-                        {broadcast.channel_id
-                          ? channelLabelById.get(broadcast.channel_id) ?? '—'
-                          : t('table.channelDefault')}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
-                      >
-                        {status.pulse && (
-                          <span className="relative flex h-1.5 w-1.5">
-                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
-                            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
-                          </span>
-                        )}
-                        {tStatus(status.label)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden text-muted-foreground sm:table-cell">
+                      {' · '}
                       {new Date(broadcast.created_at).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      {showChannelColumn && (
+                        <>
+                          {' · '}
+                          {broadcast.channel_id
+                            ? channelLabelById.get(broadcast.channel_id) ?? '—'
+                            : t('table.channelDefault')}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <span
+                    className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${status.classes}`}
+                  >
+                    {status.pulse && (
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-yellow-400 opacity-75" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-yellow-400" />
+                      </span>
+                    )}
+                    {tStatus(status.label)}
+                  </span>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                    <Users className="size-3.5 text-muted-foreground" />
+                    {t('table.recipients')}: {broadcast.total_recipients}
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CheckCheck className="size-3.5 shrink-0" />
+                      {percent(broadcast.delivered_count, broadcast.total_recipients)}%
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Eye className="size-3.5 shrink-0" />
+                      {percent(broadcast.read_count, broadcast.total_recipients)}%
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <MessageCircle className="size-3.5 shrink-0" />
+                      {percent(broadcast.replied_count, broadcast.total_recipients)}%
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          <Card
+            className="flex cursor-pointer items-center justify-center border-dashed py-8 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+            onClick={() => router.push('/broadcasts/new')}
+          >
+            <div className="flex flex-col items-center gap-2">
+              <Plus className="size-6" />
+              <span className="text-sm font-medium">{t('newBroadcast')}</span>
+            </div>
+          </Card>
         </div>
         </>
       )}
