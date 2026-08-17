@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Broadcast, BroadcastRecipient, RecipientStatus } from '@/types';
+import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -32,6 +33,7 @@ import {
   Download,
   ChevronDown,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -46,12 +48,20 @@ interface StatCardProps {
   total: number;
   icon: React.ReactNode;
   color: string;
+  active: boolean;
+  onClick: () => void;
 }
 
-function StatCard({ label, value, total, icon, color }: StatCardProps) {
+function StatCard({ label, value, total, icon, color, active, onClick }: StatCardProps) {
   const pct = total > 0 ? Math.round((value / total) * 100) : 0;
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border p-4 text-left transition-colors ${
+        active ? 'border-primary bg-primary/5' : 'border-border bg-card hover:border-primary/40'
+      }`}
+    >
       <div className="flex items-center justify-between">
         <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${color}`}>
           {icon}
@@ -60,7 +70,7 @@ function StatCard({ label, value, total, icon, color }: StatCardProps) {
       </div>
       <p className="mt-3 text-2xl font-bold text-foreground">{value.toLocaleString()}</p>
       <p className="text-xs text-muted-foreground">{label}</p>
-    </div>
+    </button>
   );
 }
 
@@ -158,38 +168,59 @@ export default function BroadcastDetailPage() {
   );
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const { retryFailedRecipients } = useBroadcastSending();
+
+  const fetchData = useCallback(async () => {
+    try {
+      const supabase = createClient();
+
+      const { data: bc, error: bcError } = await supabase
+        .from('broadcasts')
+        .select('*')
+        .eq('id', broadcastId)
+        .single();
+
+      if (bcError) throw bcError;
+      setBroadcast(bc);
+
+      const { data: recs, error: recsError } = await supabase
+        .from('broadcast_recipients')
+        .select('*, contact:contacts(*)')
+        .eq('broadcast_id', broadcastId)
+        .order('created_at', { ascending: false });
+
+      if (recsError) throw recsError;
+      setRecipients(recs ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('notFound'));
+    } finally {
+      setLoading(false);
+    }
+  }, [broadcastId, t]);
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const supabase = createClient();
-
-        const { data: bc, error: bcError } = await supabase
-          .from('broadcasts')
-          .select('*')
-          .eq('id', broadcastId)
-          .single();
-
-        if (bcError) throw bcError;
-        setBroadcast(bc);
-
-        const { data: recs, error: recsError } = await supabase
-          .from('broadcast_recipients')
-          .select('*, contact:contacts(*)')
-          .eq('broadcast_id', broadcastId)
-          .order('created_at', { ascending: false });
-
-        if (recsError) throw recsError;
-        setRecipients(recs ?? []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : t('notFound'));
-      } finally {
-        setLoading(false);
-      }
-    }
-
     fetchData();
-  }, [broadcastId]);
+  }, [fetchData]);
+
+  async function handleRetryFailed() {
+    setRetrying(true);
+    try {
+      const { retried, stillFailed } = await retryFailedRecipients(broadcastId);
+      if (retried === 0 && stillFailed === 0) {
+        toast.info(t('toastNoFailedRecipients'));
+      } else if (stillFailed === 0) {
+        toast.success(t('toastRetrySuccess', { count: retried }));
+      } else {
+        toast.warning(t('toastRetryPartial', { retried, stillFailed }));
+      }
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastRetryFailed'));
+    } finally {
+      setRetrying(false);
+    }
+  }
 
   const filteredRecipients = useMemo(
     () =>
@@ -348,7 +379,9 @@ export default function BroadcastDetailPage() {
         )}
       </div>
 
-      {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed */}
+      {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed.
+          Clicking a card filters the recipients table below to that status
+          (Total clears the filter). */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard
           label={t('stats.totalRecipients')}
@@ -356,6 +389,8 @@ export default function BroadcastDetailPage() {
           total={broadcast.total_recipients}
           icon={<Users className="h-4 w-4" />}
           color="bg-muted text-muted-foreground"
+          active={statusFilter === 'all'}
+          onClick={() => setStatusFilter('all')}
         />
         <StatCard
           label={t('stats.sent')}
@@ -363,6 +398,8 @@ export default function BroadcastDetailPage() {
           total={broadcast.total_recipients}
           icon={<Send className="h-4 w-4" />}
           color="bg-primary/10 text-primary"
+          active={statusFilter === 'sent'}
+          onClick={() => setStatusFilter('sent')}
         />
         <StatCard
           label={t('stats.delivered')}
@@ -370,6 +407,8 @@ export default function BroadcastDetailPage() {
           total={broadcast.total_recipients}
           icon={<CheckCheck className="h-4 w-4" />}
           color="bg-teal-500/10 text-teal-400"
+          active={statusFilter === 'delivered'}
+          onClick={() => setStatusFilter('delivered')}
         />
         <StatCard
           label={t('stats.read')}
@@ -377,6 +416,8 @@ export default function BroadcastDetailPage() {
           total={broadcast.total_recipients}
           icon={<Eye className="h-4 w-4" />}
           color="bg-blue-500/10 text-blue-400"
+          active={statusFilter === 'read'}
+          onClick={() => setStatusFilter('read')}
         />
         <StatCard
           label={t('stats.replied')}
@@ -384,6 +425,8 @@ export default function BroadcastDetailPage() {
           total={broadcast.total_recipients}
           icon={<MessageCircle className="h-4 w-4" />}
           color="bg-indigo-500/10 text-indigo-400"
+          active={statusFilter === 'replied'}
+          onClick={() => setStatusFilter('replied')}
         />
         <StatCard
           label={t('stats.failed')}
@@ -391,8 +434,31 @@ export default function BroadcastDetailPage() {
           total={broadcast.total_recipients}
           icon={<AlertCircle className="h-4 w-4" />}
           color="bg-red-500/10 text-red-400"
+          active={statusFilter === 'failed'}
+          onClick={() => setStatusFilter('failed')}
         />
       </div>
+
+      {broadcast.failed_count > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+          <p className="text-sm text-red-300">
+            {t('retryFailedHint', { count: broadcast.failed_count })}
+          </p>
+          <Button
+            size="sm"
+            onClick={handleRetryFailed}
+            disabled={retrying}
+            className="shrink-0 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+          >
+            {retrying ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {retrying ? t('retrying') : t('retryFailed')}
+          </Button>
+        </div>
+      )}
 
       <FunnelChart steps={funnelSteps} />
 

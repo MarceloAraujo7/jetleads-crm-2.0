@@ -917,7 +917,14 @@
         "failed": "Falhou"
       },
       "toastFailedDelete": "Falha ao excluir: {error}",
-      "toastDeleted": "Disparo excluído"
+      "toastDeleted": "Disparo excluído",
+      "retryFailedHint": "{count} {count, plural, =1 {destinatário falhou} other {destinatários falharam}} no envio.",
+      "retryFailed": "Reenviar falhas",
+      "retrying": "Reenviando…",
+      "toastNoFailedRecipients": "Nenhum destinatário com falha para reenviar.",
+      "toastRetrySuccess": "{count} {count, plural, =1 {mensagem reenviada} other {mensagens reenviadas}} com sucesso.",
+      "toastRetryPartial": "{retried} reenviada(s) com sucesso, {stillFailed} ainda falharam.",
+      "toastRetryFailed": "Falha ao reenviar as mensagens."
     },
     "new": {
       "title": "Novo disparo",

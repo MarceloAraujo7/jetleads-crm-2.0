@@ -917,7 +917,14 @@
         "failed": "Failed"
       },
       "toastFailedDelete": "Failed to delete: {error}",
-      "toastDeleted": "Broadcast deleted"
+      "toastDeleted": "Broadcast deleted",
+      "retryFailedHint": "{count} {count, plural, =1 {recipient} other {recipients}} failed to send.",
+      "retryFailed": "Retry failed",
+      "retrying": "Retrying…",
+      "toastNoFailedRecipients": "No failed recipients to retry.",
+      "toastRetrySuccess": "{count} {count, plural, =1 {message} other {messages}} resent successfully.",
+      "toastRetryPartial": "{retried} resent successfully, {stillFailed} still failed.",
+      "toastRetryFailed": "Failed to retry the messages."
     },
     "new": {
       "title": "New Broadcast",

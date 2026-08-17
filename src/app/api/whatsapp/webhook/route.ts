@@ -60,6 +60,13 @@ export interface WhatsAppMessage {
     button_reply?: { id: string; title: string }
     list_reply?: { id: string; title: string; description?: string }
   }
+  /**
+   * Set when the customer taps a QUICK_REPLY button on a TEMPLATE
+   * message (broadcasts) — a distinct top-level type from `interactive`,
+   * which only covers buttons on messages we sent via the interactive
+   * API (Flows). Meta doesn't consider these two the same shape.
+   */
+  button?: { text?: string; payload?: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
 }
@@ -1040,6 +1047,12 @@ async function parseMessageContent(
       }
       return { ...empty, contentText: '[Interactive reply]' }
     }
+
+    case 'button':
+      // Tap on a template's QUICK_REPLY button (e.g. from a broadcast) —
+      // was previously falling through to the "unsupported type" default
+      // and showing a raw error string in the inbox instead of the tap.
+      return { ...empty, contentText: message.button?.text || message.button?.payload || null }
 
     default:
       return {

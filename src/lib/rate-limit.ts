@@ -117,10 +117,17 @@ export const RATE_LIMITS = {
   /** Individual message send. 60/min per user = one per second
    *  sustained, comfortable for a live human typing. */
   send: { limit: 60, windowMs: 60_000 },
-  /** Broadcast dispatch. 5/min per user — even a 1 000-recipient
-   *  broadcast is one call; this caps the rate at which a single user
-   *  can launch campaigns, not the messages inside one. */
-  broadcast: { limit: 5, windowMs: 60_000 },
+  /** Broadcast dispatch. NOTE: despite the name this is checked on
+   *  every `/api/whatsapp/broadcast` call, and the dashboard wizard
+   *  calls that route once per 10-recipient batch (not once per
+   *  broadcast) — a 1 000-recipient send makes ~100 calls. The old
+   *  value here (5/min) was sized for "once per campaign launch" and
+   *  ended up rate-limiting large broadcasts partway through, mislabeling
+   *  real sends as failed with no way to tell it apart from an actual
+   *  Meta rejection. Sized instead to comfortably cover one large
+   *  broadcast's batch cadence while still bounding a runaway/scripted
+   *  caller hitting this route directly. */
+  broadcast: { limit: 120, windowMs: 60_000 },
   /** Reaction add/swap/remove. More permissive than send — users
    *  fidget with reactions and a single "swap" is actually two calls
    *  (remove + add) under the hood. */

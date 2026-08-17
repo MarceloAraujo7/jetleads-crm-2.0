@@ -62,6 +62,10 @@ interface BroadcastPayload {
 
 interface UseBroadcastSendingReturn {
   createAndSendBroadcast: (payload: BroadcastPayload) => Promise<string>;
+  /** Re-sends the template to every recipient currently `failed` on an
+   *  existing broadcast, reusing its stored template/variables/channel.
+   *  Returns how many of those retried recipients ended up sent. */
+  retryFailedRecipients: (broadcastId: string) => Promise<{ retried: number; stillFailed: number }>;
   isProcessing: boolean;
   progress: number;
 }
@@ -339,6 +343,325 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     return data ?? [];
   }
 
+  interface SendableRecipient {
+    id: string;
+    contact: Contact | null;
+  }
+
+  /** Positional {{1}}/{{2}}… substitution for a readable Inbox preview
+   *  of a sent template — not full Meta-parity rendering, just enough
+   *  for the conversation list/bubble to show something meaningful. */
+  function renderTemplatePreview(
+    bodyText: string | null | undefined,
+    templateName: string,
+    params: string[],
+  ): string {
+    let body = bodyText || templateName;
+    params.forEach((val, i) => {
+      body = body.split(`{{${i + 1}}}`).join(val || '');
+    });
+    return body;
+  }
+
+  /** Find (oldest-first) or create the single conversation for
+   *  (accountId, contactId) — same one-per-pair convention the inbound
+   *  webhook uses. Re-resolves on a unique-index race instead of
+   *  failing, so a reply landing at the same instant can't 23505 this. */
+  async function findOrCreateConversationForContact(
+    supabase: ReturnType<typeof createClient>,
+    accountId: string,
+    contactId: string,
+    userId: string,
+  ): Promise<string | null> {
+    const { data: existing } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (existing && existing.length > 0) return existing[0].id as string;
+
+    const { data: created, error } = await supabase
+      .from('conversations')
+      .insert({ account_id: accountId, user_id: userId, contact_id: contactId, status: 'open', unread_count: 0 })
+      .select('id')
+      .single();
+    if (!error && created) return created.id as string;
+
+    const { data: raced } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    return (raced?.[0]?.id as string | undefined) ?? null;
+  }
+
+  /**
+   * Mirrors a successfully-sent broadcast message into the Inbox, so
+   * every recipient shows up as a conversation with the sent template
+   * visible — not just the ones who happened to reply. Best-effort:
+   * callers swallow its errors, since a mirroring hiccup must never
+   * affect the actual send/delivery bookkeeping.
+   */
+  async function mirrorSentBroadcastToInbox(
+    supabase: ReturnType<typeof createClient>,
+    accountId: string,
+    userId: string,
+    contact: Contact,
+    template: MessageTemplate,
+    params: string[],
+    whatsappMessageId: string | null,
+  ): Promise<void> {
+    const conversationId = await findOrCreateConversationForContact(supabase, accountId, contact.id, userId);
+    if (!conversationId) return;
+    const preview = renderTemplatePreview(template.body_text, template.name, params);
+    await supabase.from('messages').insert({
+      conversation_id: conversationId,
+      sender_type: 'agent',
+      content_type: 'template',
+      content_text: preview,
+      template_name: template.name,
+      message_id: whatsappMessageId,
+      status: 'sent',
+    });
+    await supabase
+      .from('conversations')
+      .update({
+        last_message_text: preview,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId);
+  }
+
+  /**
+   * Batched send loop shared by a fresh broadcast and a failed-recipient
+   * retry: sends `SEND_BATCH_SIZE` at a time via `/api/whatsapp/broadcast`,
+   * stamping each `broadcast_recipients` row with the result. `onProgress`
+   * receives a 0..1 fraction so callers can map it into their own overall
+   * progress range.
+   *
+   * `headerMediaUrl` is the wizard's upload/paste override for a
+   * media-header template; a retry has no persisted per-send value to
+   * reapply, so it passes undefined and the send falls back to the
+   * template's own stored `header_media_url` server-side.
+   */
+  async function sendRecipientBatches(
+    supabase: ReturnType<typeof createClient>,
+    recipients: SendableRecipient[],
+    template: MessageTemplate,
+    variables: Record<string, VariableMapping>,
+    channelId: string | null | undefined,
+    headerMediaUrl: string | undefined,
+    onProgress: (fraction: number) => void,
+  ): Promise<{ failedCount: number }> {
+    let failedCount = 0;
+    const totalRecipients = recipients.length;
+
+    const contactIds = recipients
+      .map((r) => r.contact?.id)
+      .filter((id): id is string => Boolean(id));
+    const customValueIndex = await fetchCustomValueIndex(supabase, contactIds);
+
+    // Needed to mirror sends into the Inbox (conversations.user_id /
+    // messages audit trail) — resolved once up front rather than per
+    // recipient.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const senderUserId = session?.user?.id;
+
+    const headerType = template.header_type;
+    const isMediaHeader =
+      headerType === 'image' || headerType === 'video' || headerType === 'document';
+    const messageParams =
+      isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
+
+    for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
+      const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
+
+      const paramsByRecipientId = new Map<string, string[]>();
+      const apiRecipients = batch
+        .filter((r) => r.contact?.phone)
+        .map((r) => {
+          const params = r.contact
+            ? resolveVariables(variables, r.contact, customValueIndex.get(r.contact.id))
+            : [];
+          paramsByRecipientId.set(r.id, params);
+          return {
+            phone: r.contact!.phone as string,
+            params,
+            ...(messageParams ? { messageParams } : {}),
+          };
+        });
+
+      if (apiRecipients.length === 0) continue;
+
+      try {
+        const res = await fetch('/api/whatsapp/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recipients: apiRecipients,
+            template_name: template.name,
+            template_language: template.language ?? 'en_US',
+            channel_id: channelId || undefined,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Broadcast API request failed');
+        }
+
+        const resultsByPhone = new Map<string, BroadcastApiResult>();
+        for (const r of (data.results ?? []) as BroadcastApiResult[]) {
+          resultsByPhone.set(r.phone, r);
+        }
+
+        for (const recipient of batch) {
+          const phone = recipient.contact?.phone;
+          const result = phone ? resultsByPhone.get(phone) : undefined;
+
+          if (!result) {
+            failedCount++;
+            await supabase
+              .from('broadcast_recipients')
+              .update({
+                status: 'failed',
+                error_message: 'No phone number on contact',
+              })
+              .eq('id', recipient.id);
+            continue;
+          }
+
+          if (result.status === 'sent') {
+            await supabase
+              .from('broadcast_recipients')
+              .update({
+                status: 'sent',
+                sent_at: new Date().toISOString(),
+                whatsapp_message_id: result.whatsapp_message_id ?? null,
+                error_message: null,
+              })
+              .eq('id', recipient.id);
+
+            if (accountId && senderUserId && recipient.contact) {
+              try {
+                await mirrorSentBroadcastToInbox(
+                  supabase,
+                  accountId,
+                  senderUserId,
+                  recipient.contact,
+                  template,
+                  paramsByRecipientId.get(recipient.id) ?? [],
+                  result.whatsapp_message_id ?? null,
+                );
+              } catch (mirrorErr) {
+                console.error('[broadcast] failed to mirror sent message into Inbox:', mirrorErr);
+              }
+            }
+          } else {
+            failedCount++;
+            await supabase
+              .from('broadcast_recipients')
+              .update({
+                status: 'failed',
+                error_message: result.error ?? 'Unknown error',
+              })
+              .eq('id', recipient.id);
+          }
+        }
+      } catch (err) {
+        for (const recipient of batch) {
+          failedCount++;
+          await supabase
+            .from('broadcast_recipients')
+            .update({
+              status: 'failed',
+              error_message: err instanceof Error ? err.message : 'Unknown error',
+            })
+            .eq('id', recipient.id);
+        }
+      }
+
+      onProgress((i + batch.length) / totalRecipients);
+
+      if (i + SEND_BATCH_SIZE < recipients.length) {
+        await sleep(SEND_BATCH_DELAY_MS);
+      }
+    }
+
+    return { failedCount };
+  }
+
+  async function retryFailedRecipients(
+    broadcastId: string,
+  ): Promise<{ retried: number; stillFailed: number }> {
+    setIsProcessing(true);
+    setProgress(0);
+    const supabase = createClient();
+
+    try {
+      const { data: broadcast, error: bErr } = await supabase
+        .from('broadcasts')
+        .select('*')
+        .eq('id', broadcastId)
+        .single();
+      if (bErr || !broadcast) throw new Error('Broadcast not found.');
+
+      const { data: templateRow, error: tErr } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('account_id', broadcast.account_id)
+        .eq('name', broadcast.template_name)
+        .eq('language', broadcast.template_language)
+        .maybeSingle();
+      if (tErr || !templateRow) {
+        throw new Error('Template not found — it may have been deleted or renamed since this broadcast was sent.');
+      }
+
+      setProgress(10);
+      const { data: failedRows, error: rErr } = await supabase
+        .from('broadcast_recipients')
+        .select('id, contact:contacts(*)')
+        .eq('broadcast_id', broadcastId)
+        .eq('status', 'failed');
+      if (rErr) throw new Error('Failed to load failed recipients.');
+
+      const recipients = (failedRows ?? []) as unknown as SendableRecipient[];
+      if (recipients.length === 0) {
+        return { retried: 0, stillFailed: 0 };
+      }
+
+      const { failedCount } = await sendRecipientBatches(
+        supabase,
+        recipients,
+        templateRow as unknown as MessageTemplate,
+        (broadcast.template_variables ?? {}) as Record<string, VariableMapping>,
+        broadcast.channel_id,
+        undefined,
+        (fraction) => setProgress(10 + Math.round(fraction * 85)),
+      );
+
+      // Only flip back to 'sent' when at least one retry actually went
+      // through — otherwise leave the broadcast's terminal status as-is
+      // rather than implying progress that didn't happen.
+      if (failedCount < recipients.length) {
+        await supabase.from('broadcasts').update({ status: 'sent' }).eq('id', broadcastId);
+      }
+
+      setProgress(100);
+      return { retried: recipients.length - failedCount, stillFailed: failedCount };
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   async function createAndSendBroadcast(payload: BroadcastPayload): Promise<string> {
     setIsProcessing(true);
     setProgress(0);
@@ -450,132 +773,16 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('Failed to fetch broadcast recipients');
       }
 
-      // One bulk fetch of custom values for every contact in this
-      // broadcast, avoiding N+1 during the send loop.
-      const contactIds = recipients
-        .map((r) => r.contact?.id)
-        .filter((id): id is string => Boolean(id));
-      const customValueIndex = await fetchCustomValueIndex(
-        supabase,
-        contactIds,
-      );
-
-      let failedCount = 0;
       const totalRecipients = recipients.length;
-
-      // Media-header templates (image/video/document) require a media
-      // URL on every send. Collected in the personalize step and applied
-      // to all recipients; falls back to the template's stored URL on the
-      // server when omitted.
-      const headerType = payload.template.header_type;
-      const isMediaHeader =
-        headerType === 'image' ||
-        headerType === 'video' ||
-        headerType === 'document';
-      const headerMediaUrl = payload.headerMediaUrl?.trim();
-      const messageParams =
-        isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
-
-      for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
-        const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
-
-        const apiRecipients = batch
-          .filter((r) => r.contact?.phone)
-          .map((r) => ({
-            phone: r.contact!.phone as string,
-            params: r.contact
-              ? resolveVariables(
-                  payload.variables,
-                  r.contact,
-                  customValueIndex.get(r.contact.id),
-                )
-              : [],
-            ...(messageParams ? { messageParams } : {}),
-          }));
-
-        if (apiRecipients.length === 0) continue;
-
-        try {
-          const res = await fetch('/api/whatsapp/broadcast', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              recipients: apiRecipients,
-              template_name: payload.template.name,
-              template_language: payload.template.language ?? 'en_US',
-              channel_id: payload.channelId || undefined,
-            }),
-          });
-
-          const data = await res.json();
-
-          if (!res.ok) {
-            throw new Error(data.error || 'Broadcast API request failed');
-          }
-
-          const resultsByPhone = new Map<string, BroadcastApiResult>();
-          for (const r of (data.results ?? []) as BroadcastApiResult[]) {
-            resultsByPhone.set(r.phone, r);
-          }
-
-          for (const recipient of batch) {
-            const phone = recipient.contact?.phone;
-            const result = phone ? resultsByPhone.get(phone) : undefined;
-
-            if (!result) {
-              failedCount++;
-              await supabase
-                .from('broadcast_recipients')
-                .update({
-                  status: 'failed',
-                  error_message: 'No phone number on contact',
-                })
-                .eq('id', recipient.id);
-              continue;
-            }
-
-            if (result.status === 'sent') {
-              await supabase
-                .from('broadcast_recipients')
-                .update({
-                  status: 'sent',
-                  sent_at: new Date().toISOString(),
-                  whatsapp_message_id: result.whatsapp_message_id ?? null,
-                  error_message: null,
-                })
-                .eq('id', recipient.id);
-            } else {
-              failedCount++;
-              await supabase
-                .from('broadcast_recipients')
-                .update({
-                  status: 'failed',
-                  error_message: result.error ?? 'Unknown error',
-                })
-                .eq('id', recipient.id);
-            }
-          }
-        } catch (err) {
-          for (const recipient of batch) {
-            failedCount++;
-            await supabase
-              .from('broadcast_recipients')
-              .update({
-                status: 'failed',
-                error_message: err instanceof Error ? err.message : 'Unknown error',
-              })
-              .eq('id', recipient.id);
-          }
-        }
-
-        const progressPct =
-          30 + Math.round(((i + batch.length) / totalRecipients) * 60);
-        setProgress(progressPct);
-
-        if (i + SEND_BATCH_SIZE < recipients.length) {
-          await sleep(SEND_BATCH_DELAY_MS);
-        }
-      }
+      const { failedCount } = await sendRecipientBatches(
+        supabase,
+        recipients,
+        payload.template,
+        payload.variables,
+        payload.channelId,
+        payload.headerMediaUrl?.trim(),
+        (fraction) => setProgress(30 + Math.round(fraction * 60)),
+      );
 
       // ── Step 5: Finalize status ───────────────────────────────────
       // Aggregate counts are maintained by the DB trigger (migration
@@ -594,5 +801,5 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
   }
 
-  return { createAndSendBroadcast, isProcessing, progress };
+  return { createAndSendBroadcast, retryFailedRecipients, isProcessing, progress };
 }
