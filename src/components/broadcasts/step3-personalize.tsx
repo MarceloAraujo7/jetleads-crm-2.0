@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Contact, CustomField, MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2, Send } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, ImageIcon, Loader2, Send, Upload } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { uploadAccountMedia, MEDIA_MAX_BYTES_BY_KIND } from '@/lib/storage/upload-media';
 
 type VariableType = 'static' | 'field' | 'custom_field';
 
@@ -85,6 +86,8 @@ export function Step3Personalize({
     Map<string, string>
   >(new Map());
   const [loadingPreview, setLoadingPreview] = useState(true);
+  const [uploadingHeader, setUploadingHeader] = useState(false);
+  const headerFileRef = useRef<HTMLInputElement>(null);
   // True once the header <img> actually fails to render — catches a
   // URL that *looks* valid (passes headerMediaError's format check)
   // but 404s or is otherwise unreachable, e.g. an expired Meta-hosted
@@ -267,6 +270,29 @@ export function Step3Personalize({
     });
   }, [placeholders, variables, firstContact, firstContactCustomValues]);
 
+  async function handleHeaderImageFile(file: File) {
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast.error(t('personalize.toastInvalidImage'));
+      return;
+    }
+    if (file.size > MEDIA_MAX_BYTES_BY_KIND.image) {
+      toast.error(
+        t('personalize.toastImageTooLarge', { size: (file.size / 1024 / 1024).toFixed(1) }),
+      );
+      return;
+    }
+    setUploadingHeader(true);
+    try {
+      const { publicUrl } = await uploadAccountMedia('chat-media', file);
+      onHeaderMediaUrlChange(publicUrl);
+      toast.success(t('personalize.toastUploadSuccess'));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('personalize.toastUploadFailed'));
+    } finally {
+      setUploadingHeader(false);
+    }
+  }
+
   const [testPhone, setTestPhone] = useState('');
   const [sendingTest, setSendingTest] = useState(false);
 
@@ -328,6 +354,38 @@ export function Step3Personalize({
           {!headerMediaUrl.trim() && (
             <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
               {t('personalize.headerImageMissingHint')}
+            </div>
+          )}
+
+          {mediaHeaderType === 'image' && (
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                ref={headerFileRef}
+                type="file"
+                accept="image/jpeg,image/png"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleHeaderImageFile(f);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={uploadingHeader}
+                onClick={() => headerFileRef.current?.click()}
+                className="border-border text-muted-foreground hover:bg-muted"
+              >
+                {uploadingHeader ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                {t('personalize.uploadImage')}
+              </Button>
+              <span className="text-xs text-muted-foreground">{t('personalize.uploadImageHint')}</span>
             </div>
           )}
 
