@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { CustomField, Tag } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -13,8 +13,26 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
+  FileText,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { toast } from 'sonner';
+import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
+
+/**
+ * Mirrors the encoding fallback in the Leads import modal
+ * (import-modal.tsx) — PT-BR-locale Excel exports commonly save as
+ * Windows-1252, not UTF-8; a raw UTF-8 decode mangles accents into
+ * U+FFFD, which is the tell to re-decode.
+ */
+async function readCsvFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const utf8 = new TextDecoder('utf-8').decode(buffer);
+  if (utf8.includes('�')) {
+    return new TextDecoder('windows-1252').decode(buffer);
+  }
+  return utf8;
+}
 
 type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
 type CustomFieldOperator = 'is' | 'is_not' | 'contains';
@@ -91,6 +109,37 @@ export function Step2SelectAudience({
   const [loadingFields, setLoadingFields] = useState(false);
   const [estimatedCount, setEstimatedCount] = useState<number | null>(null);
   const [loadingCount, setLoadingCount] = useState(false);
+  const [csvFileName, setCsvFileName] = useState<string | null>(null);
+  const [parsingCsv, setParsingCsv] = useState(false);
+  const csvFileRef = useRef<HTMLInputElement>(null);
+
+  async function handleCsvFile(file: File) {
+    setParsingCsv(true);
+    try {
+      const text = await readCsvFile(file);
+      const { rows, corruptedPhoneCount } = parseContactCsv(text);
+      if (rows.length === 0) {
+        toast.error(
+          corruptedPhoneCount > 0
+            ? t('selectAudience.toastCsvCorrupted')
+            : t('selectAudience.toastCsvEmpty'),
+        );
+        return;
+      }
+      if (corruptedPhoneCount > 0) {
+        toast.warning(t('selectAudience.toastCsvSomeCorrupted', { count: corruptedPhoneCount }));
+      }
+      setCsvFileName(file.name);
+      onUpdate({
+        ...audience,
+        csvContacts: rows.map((r) => ({ phone: r.phone, name: r.name })),
+      });
+    } catch {
+      toast.error(t('selectAudience.toastCsvParseFailed'));
+    } finally {
+      setParsingCsv(false);
+    }
+  }
 
   // Tags are used both by the primary "Filter by Tags" audience type
   // AND by the exclude-list below — so always load once on mount.
@@ -341,11 +390,43 @@ export function Step2SelectAudience({
         </div>
       )}
 
-      {audience.type === 'csv' && audience.csvContacts && audience.csvContacts.length > 0 && (
+      {audience.type === 'csv' && (
         <div className="rounded-xl border border-border bg-card/50 p-4">
-          <p className="text-sm text-foreground">
-            {t('selectAudience.csvContactsFound', { count: audience.csvContacts.length })}
-          </p>
+          <input
+            ref={csvFileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleCsvFile(f);
+              e.target.value = '';
+            }}
+          />
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => csvFileRef.current?.click()}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && csvFileRef.current?.click()}
+            className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-6 text-center transition-colors hover:border-primary/40 hover:bg-muted/40"
+          >
+            {parsingCsv ? (
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            ) : csvFileName ? (
+              <FileText className="h-6 w-6 text-primary" />
+            ) : (
+              <Upload className="h-6 w-6 text-muted-foreground" />
+            )}
+            <p className="text-sm text-foreground">
+              {csvFileName ?? t('selectAudience.csvDropzone')}
+            </p>
+            <p className="text-xs text-muted-foreground">{t('selectAudience.csvDropzoneHint')}</p>
+          </div>
+          {audience.csvContacts && audience.csvContacts.length > 0 && (
+            <p className="mt-3 text-sm text-foreground">
+              {t('selectAudience.csvContactsFound', { count: audience.csvContacts.length })}
+            </p>
+          )}
         </div>
       )}
 
@@ -437,11 +518,11 @@ export function Step2SelectAudience({
 
       {/* Audience Summary */}
       <div className="rounded-xl border border-border bg-card/50 p-4">
-        <p className="mb-2 text-sm font-medium text-foreground">Audience Summary</p>
+        <p className="mb-2 text-sm font-medium text-foreground">{t('selectAudience.summaryTitle')}</p>
         {loadingCount ? (
           <div className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span className="text-xs text-muted-foreground">Calculating…</span>
+            <span className="text-xs text-muted-foreground">{t('selectAudience.calculating')}</span>
           </div>
         ) : estimatedCount !== null ? (
           <div className="flex items-center gap-2">
@@ -449,11 +530,13 @@ export function Step2SelectAudience({
             <span className="text-sm text-foreground">
               {estimatedCount.toLocaleString()}
             </span>
-            <span className="text-xs text-muted-foreground">estimated recipients</span>
+            <span className="text-xs text-muted-foreground">
+              {t('selectAudience.estimatedRecipients')}
+            </span>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Select an audience type to see the estimate.
+            {t('selectAudience.summaryHint')}
           </p>
         )}
       </div>
