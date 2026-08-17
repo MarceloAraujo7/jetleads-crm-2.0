@@ -54,10 +54,13 @@ import {
   Shuffle,
   Layers,
   FolderInput,
+  ListChecks,
+  ArrowLeft,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
+import { LeadBaseGallery } from '@/components/contacts/lead-base-gallery';
 import { DistributionSettingsDialog } from '@/components/contacts/distribution-settings-dialog';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
@@ -104,6 +107,14 @@ function ContactsPageInner() {
   // with no base assigned, otherwise a real lead_bases.id.
   const [leadBases, setLeadBases] = useState<{ id: string; name: string }[]>([]);
   const [selectedBaseId, setSelectedBaseId] = useState<string>('');
+
+  // Landing view: a card gallery of lead bases (default) vs. the flat
+  // contacts table for a chosen base/"__none__"/all. `galleryRefreshKey`
+  // is bumped after actions taken while inside a base (import, bulk
+  // delete/move) so the gallery's counts are fresh when the user goes
+  // back, without keeping a live subscription open.
+  const [galleryView, setGalleryView] = useState(true);
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
 
   // Modals
   const [formOpen, setFormOpen] = useState(false);
@@ -270,8 +281,34 @@ function ContactsPageInner() {
   }, [fetchLeadBases]);
 
   useEffect(() => {
+    // Skip the (paginated) contacts fetch while the gallery is showing —
+    // nothing on screen needs it, and it'd just be wasted requests every
+    // time a filter/page state changes in the background.
+    if (galleryView) return;
     fetchContacts();
-  }, [fetchContacts]);
+  }, [galleryView, fetchContacts]);
+
+  function openBase(id: string) {
+    setSelectedBaseId(id === '__none__' ? '__none__' : id);
+    setPage(0);
+    setGalleryView(false);
+  }
+
+  function openBaseAndImport(id: string) {
+    openBase(id);
+    setImportOpen(true);
+  }
+
+  function backToGallery() {
+    setGalleryView(true);
+    setGalleryRefreshKey((k) => k + 1);
+  }
+
+  function viewAllContacts() {
+    setSelectedBaseId('');
+    setPage(0);
+    setGalleryView(false);
+  }
 
   function openAddForm() {
     setEditContact(null);
@@ -440,6 +477,7 @@ function ContactsPageInner() {
       toast.success(t('toastBulkDeleted', { count: ids.length }));
       setSelected(new Set());
       fetchContacts();
+      setGalleryRefreshKey((k) => k + 1);
     }
 
     setDeleting(false);
@@ -552,6 +590,7 @@ function ContactsPageInner() {
     setMoveBaseOpen(false);
     setMoveTargetBaseId('');
     fetchContacts();
+    setGalleryRefreshKey((k) => k + 1);
   }
 
   return (
@@ -559,10 +598,22 @@ function ContactsPageInner() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
+          {!galleryView && (
+            <button
+              type="button"
+              onClick={backToGallery}
+              className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-3" />
+              {t('backToBases')}
+            </button>
+          )}
           <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {totalCount > 0 ? t('subtitle', { count: totalCount }) : t('subtitleZero')}
-          </p>
+          {!galleryView && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {totalCount > 0 ? t('subtitle', { count: totalCount }) : t('subtitleZero')}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {canEditSettings && (
@@ -607,6 +658,16 @@ function ContactsPageInner() {
         </div>
       </div>
 
+      {galleryView ? (
+        <LeadBaseGallery
+          accountId={accountId}
+          onOpenBase={openBase}
+          onImportToBase={openBaseAndImport}
+          refreshKey={galleryRefreshKey}
+          onViewAll={viewAllContacts}
+        />
+      ) : (
+      <>
       {/* Search + tag filter */}
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row gap-2">
@@ -737,6 +798,22 @@ function ContactsPageInner() {
               </div>
             </PopoverContent>
           </Popover>
+
+          {totalCount > 0 && !selectAllMatching && (
+            <Button
+              variant="outline"
+              onClick={selectAllMatchingFilters}
+              disabled={selectingAllMatching}
+              className="border-border text-muted-foreground hover:bg-muted shrink-0"
+            >
+              {selectingAllMatching ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <ListChecks className="size-4" />
+              )}
+              {t('selectAllMatching', { count: totalCount })}
+            </Button>
+          )}
         </div>
 
         {/* Active tag-filter chips */}
@@ -1075,6 +1152,8 @@ function ContactsPageInner() {
           </div>
         </div>
       )}
+      </>
+      )}
 
       {/* Contact Form Dialog */}
       <ContactForm
@@ -1104,7 +1183,10 @@ function ContactsPageInner() {
       <ImportModal
         open={importOpen}
         onOpenChange={setImportOpen}
-        onImported={fetchContacts}
+        onImported={() => {
+          fetchContacts();
+          setGalleryRefreshKey((k) => k + 1);
+        }}
         defaultLeadBaseId={selectedBaseId && selectedBaseId !== '__none__' ? selectedBaseId : null}
       />
 
