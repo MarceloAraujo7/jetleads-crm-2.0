@@ -85,6 +85,11 @@ export function Step3Personalize({
     Map<string, string>
   >(new Map());
   const [loadingPreview, setLoadingPreview] = useState(true);
+  // True once the header <img> actually fails to render — catches a
+  // URL that *looks* valid (passes headerMediaError's format check)
+  // but 404s or is otherwise unreachable, e.g. an expired Meta-hosted
+  // sample link pulled in from a template sync.
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   // Load user's custom fields + a representative contact for the
   // live preview. Fall back to sample data if no contacts exist yet.
@@ -161,6 +166,11 @@ export function Step3Personalize({
     if (!isValidHttpUrl(value)) return 'invalid';
     return null;
   }, [mediaHeaderType, headerMediaUrl]);
+
+  // Give a new URL a fresh chance to load before flagging it broken.
+  useEffect(() => {
+    setImageLoadFailed(false);
+  }, [headerMediaUrl]);
 
   /**
    * A placeholder is "unmapped" if the user hasn't picked either a
@@ -314,6 +324,13 @@ export function Step3Personalize({
               {mediaHeaderType}
             </span>
           </div>
+
+          {!headerMediaUrl.trim() && (
+            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+              {t('personalize.headerImageMissingHint')}
+            </div>
+          )}
+
           <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
             {t('personalize.imageUrl')}
           </label>
@@ -327,21 +344,27 @@ export function Step3Personalize({
           <p className="mt-1.5 text-xs text-muted-foreground">
             {t('personalize.headerImageDesc')}
           </p>
+          {mediaHeaderType === 'image' && headerMediaError === null && headerMediaUrl.trim() && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={headerMediaUrl.trim()}
+              alt="Header preview"
+              className="mt-3 max-h-40 rounded-lg border border-border object-contain"
+              onError={() => setImageLoadFailed(true)}
+              onLoad={() => setImageLoadFailed(false)}
+            />
+          )}
           {mediaHeaderType === 'image' &&
             headerMediaError === null &&
-            headerMediaUrl.trim() && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={headerMediaUrl.trim()}
-                alt="Header preview"
-                className="mt-3 max-h-40 rounded-lg border border-border object-contain"
-              />
+            headerMediaUrl.trim() &&
+            imageLoadFailed && (
+              <p className="mt-1.5 text-xs text-amber-300">{t('personalize.headerImageBroken')}</p>
             )}
           {headerMediaError && (
             <p className="mt-1.5 text-xs text-amber-300">
               {headerMediaError === 'missing'
-                ? 'A media URL is required to send this template.'
-                : 'Enter a valid http(s) URL.'}
+                ? t('personalize.headerImageErrorMissing')
+                : t('personalize.headerImageErrorInvalid')}
             </p>
           )}
         </div>
