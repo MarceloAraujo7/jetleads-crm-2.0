@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { useCan } from "@/hooks/use-can";
 import { GatedButton } from "@/components/ui/gated-button";
 import { Button } from "@/components/ui/button";
-import { CampaignForm } from "@/components/campaigns/campaign-form";
 import { loadCampaignActionsWithProgress } from "@/lib/campaigns/action-progress";
 import { actionStatusConfig, campaignStatusConfig } from "@/lib/campaigns/action-status";
 import type {
@@ -167,6 +167,7 @@ function CampaignCard({
 
 export default function CampaignsPage() {
   const t = useTranslations("Campaigns");
+  const router = useRouter();
   const { accountId } = useAuth();
   const canCreate = useCan("send-messages");
 
@@ -174,9 +175,6 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("running");
-
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<CampaignWithActions | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -335,10 +333,7 @@ export default function CampaignsPage() {
         <GatedButton
           canAct={canCreate}
           gateReason="create campaigns"
-          onClick={() => {
-            setEditingEntry(null);
-            setFormOpen(true);
-          }}
+          onClick={() => router.push("/campaigns/new")}
           className="bg-primary text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
@@ -371,10 +366,7 @@ export default function CampaignsPage() {
           <GatedButton
             canAct={canCreate}
             gateReason="create campaigns"
-            onClick={() => {
-              setEditingEntry(null);
-              setFormOpen(true);
-            }}
+            onClick={() => router.push("/campaigns/new")}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="h-4 w-4" />
@@ -391,24 +383,13 @@ export default function CampaignsPage() {
             <CampaignCard
               key={entry.campaign.id}
               entry={entry}
-              onEdit={() => {
-                setEditingEntry(entry);
-                setFormOpen(true);
-              }}
+              onEdit={() => router.push(`/campaigns/${entry.campaign.id}/edit`)}
               onDuplicate={() => handleDuplicate(entry)}
               onDelete={() => handleDelete(entry)}
             />
           ))}
         </div>
       )}
-
-      <CampaignForm
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        campaign={editingEntry?.campaign ?? null}
-        initialActions={editingEntry?.actions}
-        onSaved={fetchCampaigns}
-      />
     </div>
   );
 }
