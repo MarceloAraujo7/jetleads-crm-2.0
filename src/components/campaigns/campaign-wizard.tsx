@@ -13,6 +13,7 @@ import type {
   LeadDistributionStrategy,
   MessageTemplate,
 } from "@/types";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -81,9 +82,12 @@ interface ActionRow {
 }
 
 interface CampaignWizardProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   /** Absent (undefined/null) = creating a new campaign. */
   campaign?: Campaign | null;
   initialActions?: CampaignAction[];
+  onSaved: () => void;
 }
 
 const ACTION_TYPE_ICON: Record<CampaignActionType, typeof Radio> = {
@@ -98,16 +102,23 @@ function newRow(action_type: CampaignActionType): ActionRow {
 }
 
 /**
- * Full-page campaign create/edit wizard — the account's central
- * "everything starts from a campaign" flow: lead base, team +
- * distribution, the broadcast(s) that reach that base, and the Flow
- * that qualifies replies before handoff, all in one place. Used by
- * both /campaigns/new and /campaigns/[id]/edit; each route mounts a
- * fresh instance with its own `campaign`/`initialActions` props, so
- * there's no in-place "reopen and reset" state to manage — unlike the
- * dialog this replaced.
+ * Campaign create/edit wizard — the account's central "everything
+ * starts from a campaign" flow: lead base, team + distribution, the
+ * broadcast(s) that reach that base, and the AI agent that qualifies
+ * replies before handoff, all in one place. Rendered as a (large)
+ * modal from the Campaigns list; the caller must pass a stable `key`
+ * (e.g. the campaign id, or "new") when switching which campaign is
+ * being edited so this remounts fresh — its initial state is seeded
+ * once from props via lazy useState initializers, not re-synced on
+ * prop changes.
  */
-export function CampaignWizard({ campaign, initialActions }: CampaignWizardProps) {
+export function CampaignWizard({
+  open,
+  onOpenChange,
+  campaign,
+  initialActions,
+  onSaved,
+}: CampaignWizardProps) {
   const t = useTranslations("Campaigns.form");
   const tType = useTranslations("Campaigns.actionType");
   const router = useRouter();
@@ -388,9 +399,11 @@ export function CampaignWizard({ campaign, initialActions }: CampaignWizardProps
   // "linked" until the campaign actually starts — sending is deferred
   // to handleSave, so a chosen template is enough to consider the row
   // complete here. Every other type still needs its entity picked.
+  // A campaign is a valid shell on its own (base + team, no actions yet
+  // — those can be added later by editing) — only *configured* rows
+  // need to be individually valid, not "at least one must exist."
   const canSave =
     name.trim().length > 0 &&
-    rows.length > 0 &&
     rows.every((r) => {
       if (r.title.trim().length === 0) return false;
       return r.action_type === "broadcast" ? Boolean(r.linkedId || r.pendingTemplateId) : r.linkedId.length > 0;
@@ -501,7 +514,8 @@ export function CampaignWizard({ campaign, initialActions }: CampaignWizardProps
       if (actionsError) throw actionsError;
 
       toast.success(campaign ? t("toastSaved") : t("toastCreated"));
-      router.push("/campaigns");
+      onOpenChange(false);
+      onSaved();
     } catch {
       toast.error(t("toastFailed"));
     } finally {
@@ -519,28 +533,21 @@ export function CampaignWizard({ campaign, initialActions }: CampaignWizardProps
       return;
     }
     toast.success(t("toastDeleted"));
-    router.push("/campaigns");
+    onOpenChange(false);
+    onSaved();
   }
 
   return (
     <>
-      <div className="mx-auto max-w-3xl space-y-8">
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-y-auto bg-popover p-6 text-popover-foreground">
+          <div className="space-y-8">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => router.push("/campaigns")}
-            className="border-border"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {campaign ? t("editCampaign") : t("newCampaign")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">{t("wizardSubtitle")}</p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">
+            {campaign ? t("editCampaign") : t("newCampaign")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">{t("wizardSubtitle")}</p>
         </div>
 
         {/* Step Indicator */}
@@ -1078,7 +1085,7 @@ export function CampaignWizard({ campaign, initialActions }: CampaignWizardProps
         <div className="flex items-center justify-between gap-3">
           <Button
             variant="outline"
-            onClick={isFirstStep ? () => router.push("/campaigns") : goBack}
+            onClick={isFirstStep ? () => onOpenChange(false) : goBack}
             className="border-border text-muted-foreground hover:bg-muted"
           >
             {isFirstStep ? (
@@ -1151,7 +1158,9 @@ export function CampaignWizard({ campaign, initialActions }: CampaignWizardProps
             )}
           </div>
         </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {leadBaseId && leadBaseId !== NEW_LEAD_BASE && (
         <ImportModal
