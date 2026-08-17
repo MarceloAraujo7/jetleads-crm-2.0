@@ -204,6 +204,86 @@ async function pickRoundRobin(
 }
 
 /**
+ * Assigns a conversation (and its contact, if not already owned) to a
+ * human agent at AI/Flow handoff time, instead of leaving it in the
+ * shared queue. This is the "qualify first, distribute after" hook —
+ * a handoff that didn't name a specific agent (`assign_to` /
+ * `handoffAgentId` left unset, meaning "pick one for me") means the
+ * bot/flow just decided this lead is warm, so we run the same
+ * pool/quota/rotation logic used for new-lead distribution, scoped to
+ * the contact's lead base when it has one.
+ *
+ * Deliberately ignores `lead_distribution_enabled` — unlike
+ * `maybeDistributeNewLead` (a background "maybe" run on every new
+ * contact), a handoff is an explicit act by the AI/flow to hand this
+ * specific, now-qualified lead to a human; it should always pick
+ * someone. Swallows its own errors — a distribution hiccup must never
+ * break the handoff itself, it just leaves the conversation in the
+ * shared queue instead.
+ */
+export async function assignOnHandoff(
+  db: SupabaseClient,
+  args: {
+    accountId: string
+    contactId: string
+    conversationId: string
+    channelId?: string | null
+  },
+): Promise<string | null> {
+  try {
+    const { accountId, contactId, conversationId } = args
+    const { data: contact } = await db
+      .from('contacts')
+      .select('assigned_agent_id, lead_base_id')
+      .eq('id', contactId)
+      .eq('account_id', accountId)
+      .maybeSingle()
+    if (!contact) return null
+    if (contact.assigned_agent_id) return contact.assigned_agent_id as string
+
+    const leadBaseId = (contact.lead_base_id as string | null) ?? null
+    let strategy: DistributionStrategy = 'least_loaded'
+    if (leadBaseId) {
+      const { data: base } = await db
+        .from('lead_bases')
+        .select('distribution_strategy')
+        .eq('id', leadBaseId)
+        .maybeSingle()
+      strategy = (base?.distribution_strategy as DistributionStrategy) ?? 'least_loaded'
+    } else {
+      const { data: account } = await db
+        .from('accounts')
+        .select('lead_distribution_strategy')
+        .eq('id', accountId)
+        .maybeSingle()
+      strategy = (account?.lead_distribution_strategy as DistributionStrategy) ?? 'least_loaded'
+    }
+
+    const agentId = await pickAgentForNewLead(db, accountId, {
+      strategy,
+      leadBaseId,
+      channelId: args.channelId,
+    })
+    if (!agentId) return null
+
+    await db
+      .from('contacts')
+      .update({ assigned_agent_id: agentId })
+      .eq('id', contactId)
+      .eq('account_id', accountId)
+    await db
+      .from('conversations')
+      .update({ assigned_agent_id: agentId })
+      .eq('id', conversationId)
+
+    return agentId
+  } catch (err) {
+    console.error('[assign-lead] assignOnHandoff failed:', err)
+    return null
+  }
+}
+
+/**
  * Convenience wrapper for contact-creation call sites: only assigns
  * when the account has opted in (`lead_distribution_enabled`) and the
  * contact doesn't already have an owner. Swallows its own errors —

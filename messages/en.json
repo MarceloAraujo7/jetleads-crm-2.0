@@ -519,7 +519,12 @@
       "toastError": "Import failed",
       "downloadTemplate": "Download CSV template",
       "leadBase": "Lead base",
-      "leadBaseGeneral": "General (no specific base)"
+      "leadBaseGeneral": "General (no specific base)",
+      "leadBaseCreateNew": "+ Create new base…",
+      "leadBaseNamePlaceholder": "Base name",
+      "leadBaseClientPlaceholder": "Belongs to (client)",
+      "leadBaseCreate": "Create base",
+      "toastFailedCreateBase": "Failed to create lead base"
     },
     "customFields": {
       "title": "Custom fields",
@@ -1363,8 +1368,8 @@
         "pickNextNode": "Pick a next node…",
         "none": "— None —",
         "handoffAssignTo": "Assign to",
-        "handoffAssignToHelp": "Who picks up the conversation when this node runs. Leave as shared queue to leave it unassigned for anyone to grab.",
-        "handoffQueue": "Shared queue (unassigned)"
+        "handoffAssignToHelp": "Who picks up the conversation when this node runs. Leave as auto-distribute for the system to pick the least-loaded agent (or follow the lead base's rotation).",
+        "handoffQueue": "Auto-distribute (picks an agent)"
       },
       "categories": {
         "messaging": "Messaging",
@@ -1952,8 +1957,8 @@
       "maxAutoReplies": "Max auto-replies per conversation",
       "maxAutoRepliesDesc": "After this many bot replies in one thread, the bot goes quiet.",
       "handoffTo": "Hand off to",
-      "handoffToDesc": "When the bot can’t help — or hits the reply cap — it pauses and routes the chat here, with a short note on what happened.",
-      "handoffQueue": "Unassigned queue (any agent can pick it up)",
+      "handoffToDesc": "When the bot can’t help — or hits the reply cap — it pauses and routes the chat here, with a short note on what happened. Pick a fixed agent or leave it on auto-distribute.",
+      "handoffQueue": "Auto-distribute (picks the least-loaded agent)",
       "remove": "Remove",
       "save": "Save",
       "missingModel": "Enter a model name.",

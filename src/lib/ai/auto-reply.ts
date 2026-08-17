@@ -10,6 +10,7 @@ import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
 import { notifyAgentOfHandoff } from '@/lib/whatsapp/relay-notify'
+import { assignOnHandoff } from '@/lib/contacts/assign-lead'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_channels lookups. */
@@ -155,13 +156,23 @@ export async function dispatchInboundToAiReply(
         update.assigned_agent_id = config.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)
+
+      // No specific handoff agent configured — the bot decided this
+      // lead is ready for a human, so distribute it now (least_loaded/
+      // round_robin over the contact's lead base or the account pool)
+      // instead of leaving it in the shared queue.
+      let assignedTo = update.assigned_agent_id as string | undefined
+      if (!assignedTo && !conv.assigned_agent_id) {
+        const picked = await assignOnHandoff(db, { accountId, contactId, conversationId })
+        if (picked) assignedTo = picked
+      }
+
       // Relay Proxy: notify the agent on their own WhatsApp so they can
-      // pick up the lead by quote-replying, no dashboard needed. Only
-      // fires when this handoff actually assigned a specific agent (not
-      // when it's left in the shared queue). Best-effort — never let a
-      // notification failure affect the handoff itself.
-      if (update.assigned_agent_id) {
-        void notifyAgentOfHandoff(conversationId, update.assigned_agent_id as string).catch(
+      // pick up the lead by quote-replying, no dashboard needed.
+      // Best-effort — never let a notification failure affect the
+      // handoff itself.
+      if (assignedTo) {
+        void notifyAgentOfHandoff(conversationId, assignedTo).catch(
           (err) => console.error('[ai auto-reply] notifyAgentOfHandoff failed:', err),
         )
       }

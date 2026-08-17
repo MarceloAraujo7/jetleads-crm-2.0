@@ -519,7 +519,12 @@
       "toastError": "Falha na importação",
       "downloadTemplate": "Baixar planilha-modelo",
       "leadBase": "Base de leads",
-      "leadBaseGeneral": "Geral (sem base específica)"
+      "leadBaseGeneral": "Geral (sem base específica)",
+      "leadBaseCreateNew": "+ Criar nova base…",
+      "leadBaseNamePlaceholder": "Nome da base",
+      "leadBaseClientPlaceholder": "A quem pertence (cliente)",
+      "leadBaseCreate": "Criar base",
+      "toastFailedCreateBase": "Falha ao criar a base de leads"
     },
     "customFields": {
       "title": "Campos personalizados",
@@ -1363,8 +1368,8 @@
         "pickNextNode": "Escolha um próximo nó…",
         "none": "— Nenhum —",
         "handoffAssignTo": "Atribuir para",
-        "handoffAssignToHelp": "Quem assume a conversa quando esse node roda. Deixe em fila compartilhada pra ficar sem atribuição, disponível pra qualquer um pegar.",
-        "handoffQueue": "Fila compartilhada (sem atribuição)"
+        "handoffAssignToHelp": "Quem assume a conversa quando esse node roda. Deixe em distribuição automática pra o sistema escolher o vendedor com menor carga (ou seguir o rodízio da base de leads).",
+        "handoffQueue": "Distribuição automática (escolhe o vendedor)"
       },
       "categories": {
         "messaging": "Mensagens",
@@ -1952,8 +1957,8 @@
       "maxAutoReplies": "Máximo de respostas automáticas por conversa",
       "maxAutoRepliesDesc": "Depois desse número de respostas do bot em uma mesma conversa, o bot fica em silêncio.",
       "handoffTo": "Transferir para",
-      "handoffToDesc": "Quando o bot não consegue ajudar — ou atinge o limite de respostas — ele pausa e direciona a conversa para cá, com uma breve nota sobre o que aconteceu.",
-      "handoffQueue": "Fila sem atribuição (qualquer agente pode assumir)",
+      "handoffToDesc": "Quando o bot não consegue ajudar — ou atinge o limite de respostas — ele pausa e direciona a conversa para cá, com uma breve nota sobre o que aconteceu. Escolha um agente fixo ou deixe em distribuição automática.",
+      "handoffQueue": "Distribuição automática (escolhe o vendedor com menor carga)",
       "remove": "Remover",
       "save": "Salvar",
       "missingModel": "Digite o nome de um modelo.",

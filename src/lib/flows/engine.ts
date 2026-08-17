@@ -42,6 +42,8 @@ import {
 import { decideFallback, resolveFallbackPolicy } from "./fallback";
 import { addContactTagAndDispatch } from "@/lib/contacts/tag-events";
 import { removeContactTag } from "@/lib/contacts/tag-write";
+import { assignOnHandoff } from "@/lib/contacts/assign-lead";
+import { notifyAgentOfHandoff } from "@/lib/whatsapp/relay-notify";
 import {
   type CollectInputNodeConfig,
   type ConditionNodeConfig,
@@ -442,7 +444,24 @@ async function executeHandoff(
     status: "pending",
     updated_at: new Date().toISOString(),
   };
-  if (cfg.assign_to) convUpdate.assigned_agent_id = cfg.assign_to;
+  let assignedTo: string | undefined = cfg.assign_to;
+  if (assignedTo) {
+    convUpdate.assigned_agent_id = assignedTo;
+  } else if (run.contact_id && run.conversation_id) {
+    // No specific agent named on the node — the flow reached this
+    // handoff because qualification finished ("queue" in the builder
+    // means "pick one for me"), so distribute the lead now instead of
+    // leaving it in the shared queue.
+    const picked = await assignOnHandoff(db, {
+      accountId: run.account_id,
+      contactId: run.contact_id,
+      conversationId: run.conversation_id,
+    });
+    if (picked) {
+      assignedTo = picked;
+      convUpdate.assigned_agent_id = picked;
+    }
+  }
   if (run.conversation_id) {
     await db
       .from("conversations")
@@ -451,8 +470,16 @@ async function executeHandoff(
   }
   await logEvent(db, run.id, "handoff", node.node_key, {
     note: cfg.note ?? null,
-    assigned_to: cfg.assign_to ?? null,
+    assigned_to: assignedTo ?? null,
   });
+  // Relay Proxy: notify the agent on their own WhatsApp so they can
+  // pick up the lead by quote-replying, no dashboard needed.
+  // Best-effort — never let a notification failure affect the handoff.
+  if (assignedTo && run.conversation_id) {
+    void notifyAgentOfHandoff(run.conversation_id, assignedTo).catch((err) =>
+      console.error("[flows] notifyAgentOfHandoff failed:", err),
+    );
+  }
   await endRun(db, run.id, "handed_off", "handoff_node");
 }
 
