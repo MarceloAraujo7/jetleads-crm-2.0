@@ -1,54 +1,73 @@
 'use client';
 
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { PlugZap, MessageSquareText, Zap } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { WhatsAppConfig } from './whatsapp-config';
-import { EvolutionConfig } from './evolution-config';
+import { NumbersPanel } from './numbers-panel';
 import { TemplateListPanel } from '@/components/whatsapp/template-list-panel';
 import { QuickRepliesManager } from './quick-replies-manager';
 
+type SectionKey = 'numbers' | 'templates' | 'quickReplies';
+
 /**
- * WhatsApp module — everything about talking to Meta lives here now:
- * number connection, message templates, and quick replies. Underline
- * ("line") tabs instead of the segmented-pill default — this is a
- * page-level section switch, not a toggle, so the lighter style reads
- * more like page navigation and less like a settings control.
+ * WhatsApp module — number connections, message templates, and quick
+ * replies, navigated from a left rail (icon + name + description per
+ * item) instead of top tabs, so each destination reads as its own
+ * page rather than a segment of one screen.
  */
 export function WhatsAppModule() {
   const t = useTranslations('Settings.whatsappModule');
+  const [section, setSection] = useState<SectionKey>('numbers');
+
+  const items: { key: SectionKey; icon: typeof PlugZap; label: string; desc: string }[] = [
+    { key: 'numbers', icon: PlugZap, label: t('numbersNav'), desc: t('numbersNavDesc') },
+    { key: 'templates', icon: MessageSquareText, label: t('templates'), desc: t('templatesNavDesc') },
+    { key: 'quickReplies', icon: Zap, label: t('quickReplies'), desc: t('quickRepliesNavDesc') },
+  ];
 
   return (
-    <Tabs defaultValue="connection">
-      <TabsList variant="line" className="mb-6 w-full justify-start gap-1 border-b border-border/60 pb-0">
-        <TabsTrigger value="connection" className="gap-1.5">
-          <PlugZap className="size-4" />
-          {t('connection')}
-        </TabsTrigger>
-        <TabsTrigger value="templates" className="gap-1.5">
-          <MessageSquareText className="size-4" />
-          {t('templates')}
-        </TabsTrigger>
-        <TabsTrigger value="quickReplies" className="gap-1.5">
-          <Zap className="size-4" />
-          {t('quickReplies')}
-        </TabsTrigger>
-      </TabsList>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_1fr]">
+      <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
+        {items.map(({ key, icon: Icon, label, desc }) => {
+          const active = section === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSection(key)}
+              className={`flex shrink-0 items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors lg:shrink ${
+                active
+                  ? 'border-primary bg-primary-soft'
+                  : 'border-border bg-card hover:border-primary/40'
+              }`}
+            >
+              <span
+                className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${
+                  active ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                <Icon className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span
+                  className={`block truncate text-sm font-medium ${
+                    active ? 'text-primary' : 'text-foreground'
+                  }`}
+                >
+                  {label}
+                </span>
+                <span className="hidden text-xs text-muted-foreground lg:line-clamp-2">{desc}</span>
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
-      <TabsContent value="connection">
-        <div className="space-y-6">
-          <WhatsAppConfig />
-          <EvolutionConfig />
-        </div>
-      </TabsContent>
-
-      <TabsContent value="templates">
-        <TemplateListPanel />
-      </TabsContent>
-
-      <TabsContent value="quickReplies">
-        <QuickRepliesManager />
-      </TabsContent>
-    </Tabs>
+      <div className="min-w-0">
+        {section === 'numbers' && <NumbersPanel />}
+        {section === 'templates' && <TemplateListPanel />}
+        {section === 'quickReplies' && <QuickRepliesManager />}
+      </div>
+    </div>
   );
 }

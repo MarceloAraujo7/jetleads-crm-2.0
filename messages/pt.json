@@ -1878,7 +1878,36 @@
       "cancel": "Cancelar",
       "deleteChannel": "Remover número",
       "deleteChannelConfirm": "Isso vai remover este número do WhatsApp da sua conta. Continuar?",
-      "deleteChannelSuccess": "Número removido."
+      "deleteChannelSuccess": "Número removido.",
+      "numbersPanelTitle": "Números conectados",
+      "numbersPanelDesc": "Números oficiais (Meta) e conexões pessoais (Evolution) usados pela equipe.",
+      "connectNumber": "Conectar número",
+      "connectNumberTitle": "Conectar número",
+      "connectNumberDesc": "Escolha como este número vai se conectar ao WhatsApp.",
+      "chooseConnectionType": "Tipo de conexão",
+      "officialApi": "API oficial",
+      "officialApiDesc": "Via Meta Business. Ideal para disparos em massa e atendimento com selo oficial.",
+      "evolutionApi": "Evolution API",
+      "evolutionApiDesc": "Conecte um número pessoal lendo um QR Code. Conexão não oficial.",
+      "personalNumberTitle": "WhatsApp pessoal (Evolution)",
+      "personalNumberDesc": "Cada vendedor conecta o próprio número — as conversas ficam só com você. Campanhas continuam sempre pela API oficial.",
+      "scanQrTitle": "Leia o QR Code no aparelho",
+      "scanQrDesc": "Abra o WhatsApp no celular → Aparelhos conectados → Conectar um aparelho, e escaneie o código.",
+      "generateNewQr": "Gerar novo código",
+      "generatingQr": "Gerando QR code…",
+      "connectWhatsapp": "Conectar WhatsApp",
+      "connectedBadge": "Conectado",
+      "notConnectedBadge": "Não conectado",
+      "disconnect": "Desconectar",
+      "disconnecting": "Desconectando…",
+      "disconnectSuccess": "Evolution desconectado",
+      "disconnectFailed": "Falha ao desconectar",
+      "connectFailed": "Falha ao conectar",
+      "serverUnreachable": "Não foi possível falar com o servidor",
+      "unofficialWarning": "Conexão não oficial: números pessoais podem ser bloqueados pela Meta em caso de uso comercial abusivo. Use com moderação.",
+      "configureNumber": "Configurar",
+      "viewQrCode": "Ver QR Code",
+      "noNumbersYet": "Nenhum número conectado ainda."
     },
     "sections": {
       "overview": "Visão geral",
@@ -2097,7 +2126,11 @@
       "adminOnly": "Apenas admins e proprietários podem gerenciar o módulo WhatsApp.",
       "connection": "Conexão",
       "templates": "Modelos",
-      "quickReplies": "Respostas rápidas"
+      "quickReplies": "Respostas rápidas",
+      "numbersNav": "Números",
+      "numbersNavDesc": "Conecte e gerencie os números do WhatsApp.",
+      "templatesNavDesc": "Modelos aprovados pela Meta para disparos.",
+      "quickRepliesNavDesc": "Respostas prontas para agilizar o atendimento."
     }
   }
 }
