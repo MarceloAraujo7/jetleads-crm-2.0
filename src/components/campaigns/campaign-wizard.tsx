@@ -540,7 +540,8 @@ export function CampaignWizard({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[92vh] w-full max-w-4xl flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground">
+        <DialogContent className="flex max-h-[min(92vh,900px)] w-full flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground sm:max-w-4xl">
+          <div className="flex h-full flex-col">
           {/* Header + Step Indicator — pinned, never scroll away */}
           <div className="shrink-0 space-y-4 border-b border-border/50 p-6">
             <div>
@@ -1160,6 +1161,7 @@ export function CampaignWizard({
             )}
           </div>
         </div>
+          </div>
         </DialogContent>
       </Dialog>
 
