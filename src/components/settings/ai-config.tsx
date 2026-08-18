@@ -2,50 +2,42 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Sparkles, Star, Pencil, Trash2, Plus, Bot } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 import { AiKnowledgeCard } from './ai-knowledge';
-import { AI_PROVIDER_DEFAULT_MODEL } from '@/lib/ai/defaults';
-import type { AiProvider } from '@/lib/ai/types';
+import { AiAgentForm, type AiAgentSummary } from './ai-agent-form';
 import type { AccountMember } from '@/types';
-import { fetchAccountMembers, memberLabel } from '@/lib/account/members';
+import { fetchAccountMembers } from '@/lib/account/members';
 import { useTranslations } from 'next-intl';
 
-const MASKED_KEY = '••••••••••••••••';
+interface AgentListItem {
+  id: string;
+  name: string;
+  purpose: string | null;
+  provider: string;
+  model: string;
+  is_active: boolean;
+  is_default: boolean;
+  auto_reply_enabled: boolean;
+  has_embeddings_key: boolean;
+}
 
-// Radix Select can't use an empty-string item value, so the "leave
-// unassigned" choice gets a sentinel that maps to null in the payload.
-const HANDOFF_QUEUE = '__queue__';
-
-const PROVIDER_LABEL: Record<AiProvider, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic (Claude)',
-};
-
-const KEY_PLACEHOLDER: Record<AiProvider, string> = {
-  openai: 'sk-...',
-  anthropic: 'sk-ant-...',
+const PURPOSE_LABEL_KEY: Record<string, string> = {
+  qualifier: 'purposeQualifier',
+  scheduler: 'purposeScheduler',
+  support: 'purposeSupport',
 };
 
 export function AiConfig() {
@@ -54,199 +46,103 @@ export function AiConfig() {
   const t = useTranslations('Settings.aiConfig');
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [removing, setRemoving] = useState(false);
-
-  const [configured, setConfigured] = useState(false);
-  const [provider, setProvider] = useState<AiProvider>('openai');
-  const [model, setModel] = useState(AI_PROVIDER_DEFAULT_MODEL.openai);
-  const [apiKey, setApiKey] = useState('');
-  const [keyEdited, setKeyEdited] = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [hasStoredKey, setHasStoredKey] = useState(false);
-  const [embeddingsKey, setEmbeddingsKey] = useState('');
-  const [embeddingsKeyEdited, setEmbeddingsKeyEdited] = useState(false);
-  const [hasStoredEmbeddingsKey, setHasStoredEmbeddingsKey] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState('');
-  const [isActive, setIsActive] = useState(false);
-  const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
-  const [maxPerConversation, setMaxPerConversation] = useState(3);
-  // Empty string = leave unassigned (shared queue).
-  const [handoffAgentId, setHandoffAgentId] = useState('');
+  const [agents, setAgents] = useState<AgentListItem[]>([]);
   const [members, setMembers] = useState<AccountMember[]>([]);
 
-  // Guard keyed on the account (not a bare boolean) so an in-place
-  // account switch — ownership transfer, multi-account membership —
-  // refetches instead of showing the previous account's config. Mirrors
-  // the loadedAccountIdRef pattern in whatsapp-config.tsx.
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AgentListItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const loadedAccountIdRef = useRef<string | null>(null);
 
-  const fetchConfig = useCallback(async () => {
+  const fetchAgents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/config');
+      const res = await fetch('/api/ai/configs');
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error ?? t('loadFailed'));
+        toast.error(data.error ?? t('loadFailedAgents'));
         return;
       }
-      if (data.configured) {
-        setConfigured(true);
-        setProvider(data.provider);
-        setModel(data.model);
-        setSystemPrompt(data.system_prompt ?? '');
-        setIsActive(data.is_active);
-        setAutoReplyEnabled(data.auto_reply_enabled);
-        setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
-        setHandoffAgentId(data.handoff_agent_id ?? '');
-        setHasStoredKey(Boolean(data.has_key));
-        setApiKey(data.has_key ? MASKED_KEY : '');
-        setKeyEdited(false);
-        setHasStoredEmbeddingsKey(Boolean(data.has_embeddings_key));
-        setEmbeddingsKey(data.has_embeddings_key ? MASKED_KEY : '');
-        setEmbeddingsKeyEdited(false);
-      }
+      setAgents(data.configs ?? []);
     } catch {
-      toast.error(t('loadFailed'));
+      toast.error(t('loadFailedAgents'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!accountId || loadedAccountIdRef.current === accountId) return;
     loadedAccountIdRef.current = accountId;
-    void fetchConfig();
-    // Members populate the handoff-target picker. Best-effort — on an
-    // older deployment without the endpoint the picker just shows the
-    // queue option.
+    void fetchAgents();
     void fetchAccountMembers().then(setMembers);
-  }, [accountId, fetchConfig]);
+  }, [accountId, fetchAgents]);
 
-  // Swap the model default when the provider changes, unless the user
-  // typed a custom model.
-  const handleProviderChange = (next: AiProvider) => {
-    setProvider(next);
-    const isDefaultModel =
-      model === AI_PROVIDER_DEFAULT_MODEL.openai ||
-      model === AI_PROVIDER_DEFAULT_MODEL.anthropic ||
-      model.trim() === '';
-    if (isDefaultModel) setModel(AI_PROVIDER_DEFAULT_MODEL[next]);
-  };
+  function openCreate() {
+    setEditingId(null);
+    setFormOpen(true);
+  }
 
-  const keyPayload = () => (keyEdited ? apiKey.trim() : undefined);
+  function openEdit(id: string) {
+    setEditingId(id);
+    setFormOpen(true);
+  }
 
-  // undefined = leave unchanged; '' typed = null (clear); text = set.
-  const embeddingsKeyPayload = () =>
-    embeddingsKeyEdited ? embeddingsKey.trim() || null : undefined;
-
-  const buildBody = () => ({
-    provider,
-    model: model.trim(),
-    api_key: keyPayload(),
-    embeddings_api_key: embeddingsKeyPayload(),
-    system_prompt: systemPrompt.trim() || null,
-    is_active: isActive,
-    auto_reply_enabled: autoReplyEnabled,
-    auto_reply_max_per_conversation: maxPerConversation,
-    handoff_agent_id: handoffAgentId || null,
-  });
-
-  const handleTest = async () => {
-    setTesting(true);
+  async function handleSetDefault(id: string) {
+    setSettingDefaultId(id);
     try {
-      const res = await fetch('/api/ai/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider,
-          model: model.trim(),
-          api_key: keyPayload(),
-        }),
-      });
+      const res = await fetch(`/api/ai/configs/${id}/set-default`, { method: 'POST' });
       const data = await res.json();
-      if (res.ok) toast.success(t('testSuccess'));
-      else toast.error(data.error ?? t('testRejected'));
+      if (!res.ok) {
+        toast.error(data.error ?? t('setDefaultFailed'));
+        return;
+      }
+      toast.success(t('setDefaultSuccess'));
+      await fetchAgents();
     } catch {
-      toast.error(t('testNetworkError'));
+      toast.error(t('setDefaultFailed'));
     } finally {
-      setTesting(false);
+      setSettingDefaultId(null);
     }
-  };
+  }
 
-  const handleSave = async () => {
-    if (!model.trim()) {
-      toast.error(t('missingModel'));
-      return;
-    }
-    if (!configured && !keyEdited) {
-      toast.error(t('missingApiKey'));
-      return;
-    }
-    setSaving(true);
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      const res = await fetch('/api/ai/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildBody()),
-      });
+      const res = await fetch(`/api/ai/configs/${deleteTarget.id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (res.ok) {
-        toast.success(t('saveSuccess'));
-        await fetchConfig();
-      } else {
-        toast.error(data.error ?? t('saveFailed'));
+      if (!res.ok) {
+        toast.error(data.error ?? t('deleteAgentFailed'));
+        return;
       }
+      toast.success(t('deleteAgentSuccess'));
+      setDeleteTarget(null);
+      await fetchAgents();
     } catch {
-      toast.error(t('saveFailed'));
+      toast.error(t('deleteAgentFailed'));
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
-  };
+  }
 
-  const handleRemove = async () => {
-    setRemoving(true);
-    try {
-      const res = await fetch('/api/ai/config', { method: 'DELETE' });
-      if (res.ok) {
-        toast.success(t('removeSuccess'));
-        setConfigured(false);
-        setHasStoredKey(false);
-        setApiKey('');
-        setKeyEdited(false);
-        setIsActive(false);
-        setAutoReplyEnabled(false);
-        setSystemPrompt('');
-        setHandoffAgentId('');
-      } else {
-        const data = await res.json();
-        toast.error(data.error ?? t('removeFailed'));
-      }
-    } catch {
-      toast.error(t('removeFailed'));
-    } finally {
-      setRemoving(false);
-    }
-  };
+  const cloneCandidates: AiAgentSummary[] = agents.map((a) => ({ id: a.id, name: a.name }));
+  const defaultAgent = agents.find((a) => a.is_default);
 
   if (loading || profileLoading) {
     return (
       <div className="flex items-center justify-center py-16 text-muted-foreground">
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('loadFailed')} {/* Re-using label or a global one, wait, loading is better. Let's use useTranslations from overview or just hardcode Loading... actually I should add loading to aiConfig */}
-        {/* Wait, I didn't add loading to aiConfig. I'll just use loading. */}
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t('loadFailedAgents')}
       </div>
     );
   }
 
-  const disabled = !canEdit || saving;
-
   return (
     <div>
-      <SettingsPanelHead
-        title={t('title')}
-        description={t('description')}
-      />
+      <SettingsPanelHead title={t('title')} description={t('description')} />
 
       {!canEdit && (
         <p className="mb-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
@@ -255,272 +151,156 @@ export function AiConfig() {
       )}
 
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-primary" /> {t('providerAndKey')}
-            </CardTitle>
-            <CardDescription>
-              {t('encryptionNotice')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('provider')}</Label>
-                <Select
-                  value={provider}
-                  onValueChange={(v) => handleProviderChange(v as AiProvider)}
-                  disabled={disabled}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="openai">{PROVIDER_LABEL.openai}</SelectItem>
-                    <SelectItem value="anthropic">
-                      {PROVIDER_LABEL.anthropic}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ai-model">{t('model')}</Label>
-                <Input
-                  id="ai-model"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  placeholder={AI_PROVIDER_DEFAULT_MODEL[provider]}
-                  disabled={disabled}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ai-key">{t('apiKey')}</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    id="ai-key"
-                    type={showKey ? 'text' : 'password'}
-                    value={apiKey}
-                    onChange={(e) => {
-                      setApiKey(e.target.value);
-                      setKeyEdited(true);
-                    }}
-                    onFocus={() => {
-                      if (!keyEdited && hasStoredKey) {
-                        setApiKey('');
-                        setKeyEdited(true);
-                      }
-                    }}
-                    placeholder={KEY_PLACEHOLDER[provider]}
-                    disabled={disabled}
-                    autoComplete="off"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    tabIndex={-1}
-                  >
-                    {showKey ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={handleTest}
-                  disabled={disabled || testing}
-                >
-                  {testing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
+        {agents.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border py-16">
+            <Sparkles className="size-8 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">{t('noAgentsYet')}</p>
+            {canEdit && (
+              <Button size="sm" onClick={openCreate} className="mt-1">
+                <Plus className="size-3.5" />
+                {t('createFirstAgent')}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {agents.map((agent) => (
+              <Card key={agent.id}>
+                <CardHeader className="flex-row items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <Bot className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-heading text-base font-medium text-foreground">
+                        {agent.name}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {agent.purpose && PURPOSE_LABEL_KEY[agent.purpose]
+                          ? t(PURPOSE_LABEL_KEY[agent.purpose])
+                          : t('purposeCustom')}
+                      </p>
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title={t('editAgentTitle')}
+                        onClick={() => openEdit(agent.id)}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        title={t('deleteAgent')}
+                        onClick={() => setDeleteTarget(agent)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
                   )}
-                  {t('testKey')}
-                </Button>
-              </div>
-            </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {agent.is_default && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary-soft px-2 py-0.5 text-[11px] font-medium text-primary">
+                        <Star className="size-3" />
+                        {t('defaultBadge')}
+                      </span>
+                    )}
+                    <span
+                      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                        agent.is_active
+                          ? 'border-emerald-600/30 bg-emerald-500/10 text-emerald-400'
+                          : 'border-border bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {agent.is_active ? t('activeBadge') : t('inactiveBadge')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {agent.provider === 'openai' ? 'OpenAI' : 'Anthropic'} · {agent.model}
+                  </p>
+                  {canEdit && !agent.is_default && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleSetDefault(agent.id)}
+                      disabled={settingDefaultId === agent.id}
+                      className="w-full border-border text-muted-foreground hover:bg-muted"
+                    >
+                      {settingDefaultId === agent.id ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Star className="size-3.5" />
+                      )}
+                      {t('setAsDefault')}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
 
-            <div className="space-y-2">
-              <Label htmlFor="ai-embeddings-key">
-                {t('embeddingsKey')}{' '}
-                <span className="font-normal text-muted-foreground">
-                  {t('optionalSemanticSearch')}
-                </span>
-              </Label>
-              <Input
-                id="ai-embeddings-key"
-                type="password"
-                value={embeddingsKey}
-                onChange={(e) => {
-                  setEmbeddingsKey(e.target.value);
-                  setEmbeddingsKeyEdited(true);
-                }}
-                onFocus={() => {
-                  if (!embeddingsKeyEdited && hasStoredEmbeddingsKey) {
-                    setEmbeddingsKey('');
-                    setEmbeddingsKeyEdited(true);
-                  }
-                }}
-                placeholder="sk-... (OpenAI)"
-                disabled={disabled}
-                autoComplete="off"
-              />
-              <p className="text-xs text-muted-foreground">
-                {t('embeddingsHint', {
-                  sameKeyText: provider === 'openai' ? t('sameKeyText') : '',
-                })}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t('behaviour')}</CardTitle>
-            <CardDescription>
-              {t('behaviourDesc')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ai-prompt">{t('businessContext')}</Label>
-              <Textarea
-                id="ai-prompt"
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                placeholder={t('promptPlaceholder')}
-                rows={5}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('enableAssistant')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('enableAssistantDesc')}
-                </p>
-              </div>
-              <Switch
-                checked={isActive}
-                onCheckedChange={setIsActive}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {t('autoReply')}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {t('autoReplyDesc')}
-                </p>
-              </div>
-              <Switch
-                checked={autoReplyEnabled}
-                onCheckedChange={setAutoReplyEnabled}
-                disabled={disabled || !isActive}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <Label htmlFor="ai-max">{t('maxAutoReplies')}</Label>
-                <p className="text-xs text-muted-foreground">
-                  {t('maxAutoRepliesDesc')}
-                </p>
-              </div>
-              <Input
-                id="ai-max"
-                type="number"
-                min={1}
-                max={20}
-                value={maxPerConversation}
-                onChange={(e) =>
-                  setMaxPerConversation(
-                    Math.min(20, Math.max(1, Number(e.target.value) || 1)),
-                  )
-                }
-                disabled={disabled || !autoReplyEnabled}
-                className="w-20"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ai-handoff">{t('handoffTo')}</Label>
-              <p className="text-xs text-muted-foreground">
-                {t('handoffToDesc')}
-              </p>
-              <Select
-                value={handoffAgentId || HANDOFF_QUEUE}
-                onValueChange={(v) =>
-                  setHandoffAgentId(!v || v === HANDOFF_QUEUE ? '' : v)
-                }
-                disabled={disabled || !autoReplyEnabled}
+            {canEdit && (
+              <Card
+                className="flex cursor-pointer items-center justify-center border-dashed py-8 text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                onClick={openCreate}
               >
-                <SelectTrigger id="ai-handoff">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={HANDOFF_QUEUE}>
-                    {t('handoffQueue')}
-                  </SelectItem>
-                  {members.map((m) => (
-                    <SelectItem key={m.user_id} value={m.user_id}>
-                      {memberLabel(m)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+                <div className="flex flex-col items-center gap-2">
+                  <Plus className="size-6" />
+                  <span className="text-sm font-medium">{t('newAgent')}</span>
+                </div>
+              </Card>
+            )}
+          </div>
+        )}
 
         <AiKnowledgeCard
           accountId={accountId}
           canEdit={canEdit}
-          hasEmbeddingsKey={
-            embeddingsKeyEdited
-              ? embeddingsKey.trim().length > 0
-              : hasStoredEmbeddingsKey
-          }
+          hasEmbeddingsKey={defaultAgent?.has_embeddings_key ?? false}
         />
-
-        <div className="flex items-center justify-between">
-          {configured ? (
-            <Button
-              variant="ghost"
-              onClick={handleRemove}
-              disabled={!canEdit || removing}
-              className="text-destructive hover:text-destructive"
-            >
-              {removing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Trash2 className="mr-2 h-4 w-4" />
-              )}
-              {t('remove')}
-            </Button>
-          ) : (
-            <span />
-          )}
-
-          <Button onClick={handleSave} disabled={disabled}>
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('save')}
-          </Button>
-        </div>
       </div>
+
+      {canEdit && (
+        <AiAgentForm
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          agentId={editingId}
+          cloneCandidates={cloneCandidates}
+          members={members}
+          onSaved={fetchAgents}
+        />
+      )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">{t('deleteAgent')}</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              {t('deleteAgentConfirm', { name: deleteTarget?.name ?? '' })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="bg-popover border-border">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              className="border-border text-muted-foreground hover:bg-muted"
+            >
+              {t('cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
+              {deleting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {t('deleteAgent')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

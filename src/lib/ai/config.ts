@@ -18,12 +18,56 @@ const CONFIG_COLUMNS =
   'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key'
 
 /**
- * Load and decrypt the account's AI config for *use* (draft or
- * auto-reply). Returns `null` when there's no row or the master switch
+ * Which specific ai_configs row a contact's conversation should use:
+ * the agent linked to whichever campaign owns the contact's lead base
+ * (campaign_actions.action_type = 'agent'), if any. Null means "no
+ * campaign-specific agent — use the account default" (the caller falls
+ * back, this never throws for a plain miss).
+ */
+async function resolveAiConfigIdForContact(
+  db: SupabaseClient,
+  accountId: string,
+  contactId: string,
+): Promise<string | null> {
+  const { data: contact } = await db
+    .from('contacts')
+    .select('lead_base_id')
+    .eq('id', contactId)
+    .eq('account_id', accountId)
+    .maybeSingle()
+  const leadBaseId = contact?.lead_base_id as string | null | undefined
+  if (!leadBaseId) return null
+
+  const { data: campaignRows } = await db
+    .from('campaigns')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('lead_base_id', leadBaseId)
+  const campaignIds = (campaignRows ?? []).map((c) => c.id as string)
+  if (campaignIds.length === 0) return null
+
+  const { data: actionRows } = await db
+    .from('campaign_actions')
+    .select('ai_config_id')
+    .in('campaign_id', campaignIds)
+    .eq('action_type', 'agent')
+    .not('ai_config_id', 'is', null)
+    .limit(1)
+  return (actionRows?.[0]?.ai_config_id as string | undefined) ?? null
+}
+
+/**
+ * Load and decrypt an AI config for *use* (draft or auto-reply).
+ * Returns `null` when there's no row or the master switch
  * (`is_active`) is off — both mean "AI is not available", which callers
  * treat identically. Throws only if the stored key can't be decrypted
  * (mismatched `ENCRYPTION_KEY`), so that distinct failure surfaces
  * rather than looking like "not configured".
+ *
+ * `opts.contactId`, when passed, resolves to that contact's campaign-
+ * specific agent (via its lead base) if one is linked; otherwise (or
+ * when omitted) falls back to the account's single `is_default` agent
+ * — the same one every pre-multi-agent call site already expected.
  *
  * Works with any client: pass the RLS-scoped SSR client from a
  * dashboard route, or the service-role admin client from the webhook.
@@ -31,14 +75,15 @@ const CONFIG_COLUMNS =
 export async function loadAiConfig(
   db: SupabaseClient,
   accountId: string,
-  opts: { requireActive?: boolean } = {},
+  opts: { requireActive?: boolean; contactId?: string } = {},
 ): Promise<AiConfig | null> {
-  const { requireActive = true } = opts
-  const { data, error } = await db
-    .from('ai_configs')
-    .select(CONFIG_COLUMNS)
-    .eq('account_id', accountId)
-    .maybeSingle()
+  const { requireActive = true, contactId } = opts
+
+  const configId = contactId ? await resolveAiConfigIdForContact(db, accountId, contactId) : null
+
+  let query = db.from('ai_configs').select(CONFIG_COLUMNS).eq('account_id', accountId)
+  query = configId ? query.eq('id', configId) : query.eq('is_default', true)
+  const { data, error } = await query.maybeSingle()
 
   if (error) throw error
   if (!data) return null
