@@ -540,58 +540,59 @@ export function CampaignWizard({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[92vh] w-full max-w-4xl overflow-y-auto bg-popover p-6 text-popover-foreground">
-          <div className="space-y-8">
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            {campaign ? t("editCampaign") : t("newCampaign")}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">{t("wizardSubtitle")}</p>
-        </div>
+        <DialogContent className="flex max-h-[92vh] w-full max-w-4xl flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground">
+          {/* Header + Step Indicator — pinned, never scroll away */}
+          <div className="shrink-0 space-y-4 border-b border-border/50 p-6">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">
+                {campaign ? t("editCampaign") : t("newCampaign")}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">{t("wizardSubtitle")}</p>
+            </div>
 
-        {/* Step Indicator */}
-        <div className="flex items-center justify-between">
-          {steps.map((step, index) => {
-            const isActive = index === currentStepIndex;
-            const isDone = index < currentStepIndex;
-            return (
-              <div key={step.key} className="flex flex-1 items-center">
-                <button
-                  type="button"
-                  onClick={() => index < currentStepIndex && setCurrentStepKey(step.key)}
-                  disabled={index >= currentStepIndex}
-                  className="flex items-center gap-2 disabled:cursor-default"
-                >
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all ${
-                      isDone
-                        ? "bg-primary text-primary-foreground"
-                        : isActive
-                          ? "border-2 border-primary bg-primary/10 text-primary"
-                          : "border border-border bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {isDone ? <Check className="h-4 w-4" /> : index + 1}
+            <div className="flex items-center justify-between">
+              {steps.map((step, index) => {
+                const isActive = index === currentStepIndex;
+                const isDone = index < currentStepIndex;
+                return (
+                  <div key={step.key} className="flex flex-1 items-center">
+                    <button
+                      type="button"
+                      onClick={() => index < currentStepIndex && setCurrentStepKey(step.key)}
+                      disabled={index >= currentStepIndex}
+                      className="flex items-center gap-2 disabled:cursor-default"
+                    >
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-all ${
+                          isDone
+                            ? "bg-primary text-primary-foreground"
+                            : isActive
+                              ? "border-2 border-primary bg-primary/10 text-primary"
+                              : "border border-border bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {isDone ? <Check className="h-4 w-4" /> : index + 1}
+                      </div>
+                      <span
+                        className={`hidden text-sm font-medium sm:block ${
+                          isActive ? "text-foreground" : isDone ? "text-primary" : "text-muted-foreground"
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    </button>
+                    {index < steps.length - 1 && (
+                      <div className={`mx-3 h-px flex-1 ${index < currentStepIndex ? "bg-primary" : "bg-muted"}`} />
+                    )}
                   </div>
-                  <span
-                    className={`hidden text-sm font-medium sm:block ${
-                      isActive ? "text-foreground" : isDone ? "text-primary" : "text-muted-foreground"
-                    }`}
-                  >
-                    {step.label}
-                  </span>
-                </button>
-                {index < steps.length - 1 && (
-                  <div className={`mx-3 h-px flex-1 ${index < currentStepIndex ? "bg-primary" : "bg-muted"}`} />
-                )}
-              </div>
-            );
-          })}
-        </div>
+                );
+              })}
+            </div>
+          </div>
 
-        {/* Step Content */}
-        <div className="min-h-[420px] space-y-6 rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow)]">
+          {/* Step Content — the only part that scrolls */}
+          <div className="flex-1 overflow-y-auto p-6">
+          <div className="min-h-[420px] space-y-6 rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow)]">
           {currentStepKey === "details" && (
             <div className="space-y-5">
               <div>
@@ -1079,10 +1080,11 @@ export function CampaignWizard({
               )}
             </div>
           )}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-3">
+        {/* Footer — pinned, never scrolls away */}
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border/50 p-6">
           <Button
             variant="outline"
             onClick={isFirstStep ? () => onOpenChange(false) : goBack}
@@ -1158,7 +1160,6 @@ export function CampaignWizard({
             )}
           </div>
         </div>
-          </div>
         </DialogContent>
       </Dialog>
 
