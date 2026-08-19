@@ -1562,7 +1562,22 @@
       "removeDialogDesc": "Remover <bold>{name}</bold> da conta? A pessoa será desconectada desta conta e receberá uma nova conta pessoal no próximo login. O login dela não é excluído.",
       "cancel": "Cancelar",
       "removing": "Removendo...",
-      "removeBtn": "Remover membro"
+      "removeBtn": "Remover membro",
+      "rolesPermissionsTitle": "Papéis e permissões",
+      "rolesPermissionsDesc": "O que cada função pode fazer no sistema.",
+      "permManageMembers": "Gerenciar membros da equipe",
+      "permEditSettings": "Editar configurações da conta",
+      "permSendMessages": "Enviar mensagens e operar dados",
+      "permUnscopedBroadcast": "Disparar campanhas sem número vinculado",
+      "permDeleteAccount": "Excluir a conta",
+      "permTransferOwnership": "Transferir propriedade da conta",
+      "securityTitle": "Segurança da conta",
+      "securityDesc": "Controles de autenticação e sessão para toda a equipe.",
+      "securityComingSoon": "Em breve",
+      "securityTwoFactor": "Exigir autenticação de dois fatores",
+      "securitySessionTimeout": "Encerrar sessão por inatividade",
+      "securityOffHours": "Bloquear acesso fora do horário comercial",
+      "securityForcePasswordReset": "Forçar troca de senha da equipe"
     },
     "invite": {
       "inviteCreated": "Convite criado",

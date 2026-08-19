@@ -1562,7 +1562,22 @@
       "removeDialogDesc": "Remove <bold>{name}</bold> from the account? They'll be signed out of this account and given a fresh personal account on their next sign-in. Their login isn't deleted.",
       "cancel": "Cancel",
       "removing": "Removing...",
-      "removeBtn": "Remove member"
+      "removeBtn": "Remove member",
+      "rolesPermissionsTitle": "Roles & permissions",
+      "rolesPermissionsDesc": "What each role can do in the system.",
+      "permManageMembers": "Manage team members",
+      "permEditSettings": "Edit account settings",
+      "permSendMessages": "Send messages and operate data",
+      "permUnscopedBroadcast": "Run broadcasts with no linked number",
+      "permDeleteAccount": "Delete the account",
+      "permTransferOwnership": "Transfer account ownership",
+      "securityTitle": "Account security",
+      "securityDesc": "Authentication and session controls for the whole team.",
+      "securityComingSoon": "Coming soon",
+      "securityTwoFactor": "Require two-factor authentication",
+      "securitySessionTimeout": "End session on inactivity",
+      "securityOffHours": "Block access outside business hours",
+      "securityForcePasswordReset": "Force team password reset"
     },
     "invite": {
       "inviteCreated": "Invite created",
