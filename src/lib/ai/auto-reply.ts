@@ -150,22 +150,23 @@ export async function dispatchInboundToAiReply(
         ai_autoreply_disabled: true,
         ai_handoff_summary: summary,
       }
-      // Only set the assignee when a target is configured AND the thread
-      // isn't already owned — never stomp an existing human assignment.
-      if (config.handoffAgentId && !conv.assigned_agent_id) {
-        update.assigned_agent_id = config.handoffAgentId
+      // Hand off to whoever already owns this lead — never stomp an
+      // existing human assignment. assignOnHandoff prefers the vendor
+      // lead distribution already picked for this contact (the Admin/
+      // Master's chosen strategy, applied back when the lead came in),
+      // only falling back to picking one live if the contact has no
+      // owner yet. The campaign's configured handoffAgentId is the
+      // last resort — for leads with no distribution result at all
+      // (distribution off, no agents in the pool, etc). This order
+      // matters: a lead the base already assigned to a specific seller
+      // must go to THAT seller, not a generic fallback agent.
+      let assignedTo: string | undefined
+      if (!conv.assigned_agent_id) {
+        const picked = await assignOnHandoff(db, { accountId, contactId, conversationId })
+        assignedTo = picked ?? config.handoffAgentId ?? undefined
+        if (assignedTo) update.assigned_agent_id = assignedTo
       }
       await db.from('conversations').update(update).eq('id', conversationId)
-
-      // No specific handoff agent configured — the bot decided this
-      // lead is ready for a human, so distribute it now (least_loaded/
-      // round_robin over the contact's lead base or the account pool)
-      // instead of leaving it in the shared queue.
-      let assignedTo = update.assigned_agent_id as string | undefined
-      if (!assignedTo && !conv.assigned_agent_id) {
-        const picked = await assignOnHandoff(db, { accountId, contactId, conversationId })
-        if (picked) assignedTo = picked
-      }
 
       // Relay Proxy: notify the agent on their own WhatsApp so they can
       // pick up the lead by quote-replying, no dashboard needed.
