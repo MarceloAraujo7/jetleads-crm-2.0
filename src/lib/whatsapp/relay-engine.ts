@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { sendTextMessage, sendMediaMessage, type MediaKind } from '@/lib/whatsapp/meta-api'
@@ -35,10 +36,78 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
     .maybeSingle()
   if (!notification) return false
 
+  await relayAndPersist(db, notification.account_id, notification.conversation_id, notification.channel_id, message)
+  return true
+}
+
+/**
+ * Fallback for the case that was breaking the "one continuous chat"
+ * expectation: the agent replies on their own WhatsApp WITHOUT
+ * quote-replying (the natural thing to do — WhatsApp gives no visual
+ * cue that quoting is required). `tryRelayFromAgent` above found
+ * nothing to match, but the sender IS a known agent's personal_phone —
+ * before giving up, check whether this agent has exactly ONE
+ * still-open conversation assigned to them. If so, there's no real
+ * ambiguity about who the reply is for, so relay it there instead of
+ * silently dropping it (which is what pushed the agent to work around
+ * it by texting the lead directly from their own number — creating a
+ * second, disconnected thread on the customer's side).
+ *
+ * Returns true once handled (relayed, or determined ambiguous/none —
+ * either way the caller should stop processing this as a new customer
+ * message). Returns false only if `senderPhone` doesn't match any
+ * agent on this account, so the caller can fall through to normal
+ * contact creation.
+ */
+export async function tryRelayFromAgentByAssignment(
+  accountId: string,
+  senderPhone: string,
+  message: WhatsAppMessage,
+): Promise<boolean> {
+  const db = supabaseAdmin()
+
+  const { data: agents } = await db
+    .from('profiles')
+    .select('user_id, personal_phone')
+    .eq('account_id', accountId)
+    .not('personal_phone', 'is', null)
+  const agentUserId = agents?.find(
+    (a) => a.personal_phone && normalizePhone(a.personal_phone) === senderPhone,
+  )?.user_id as string | undefined
+  if (!agentUserId) return false
+
+  const { data: candidates } = await db
+    .from('conversations')
+    .select('id, channel_id')
+    .eq('account_id', accountId)
+    .eq('assigned_agent_id', agentUserId)
+    .neq('status', 'closed')
+    .order('last_message_at', { ascending: false })
+    .limit(2)
+
+  if (!candidates || candidates.length !== 1) {
+    console.warn(
+      `[relay-engine] agent ${agentUserId} sent a non-quoted reply with ${candidates?.length ?? 0} open assigned conversations — can't tell which lead it's for, dropped. Ask them to quote-reply the customer's message instead.`,
+    )
+    return true
+  }
+
+  await relayAndPersist(db, accountId, candidates[0].id, candidates[0].channel_id, message)
+  return true
+}
+
+/** Shared send-to-customer + persist step used by both match paths above. */
+async function relayAndPersist(
+  db: SupabaseClient,
+  accountId: string,
+  conversationId: string,
+  channelHint: string | null,
+  message: WhatsAppMessage,
+): Promise<void> {
   const { data: conversation } = await db
     .from('conversations')
     .select('id, contact:contacts(phone)')
-    .eq('id', notification.conversation_id)
+    .eq('id', conversationId)
     .maybeSingle()
   const contact = conversation
     ? Array.isArray(conversation.contact)
@@ -46,22 +115,22 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
       : conversation.contact
     : null
   if (!conversation || !contact?.phone) {
-    console.error('[relay-engine] matched notification but conversation/contact missing:', notification)
-    return true // matched a relay message but couldn't act on it — don't fall through to contact creation
+    console.error('[relay-engine] matched conversation missing or has no contact phone:', conversationId)
+    return
   }
 
   // Reuse the exact channel that sent the notification/forward being
-  // quoted, so the reply goes out through the same number the lead
-  // has been talking to — not a freshly re-resolved (possibly
+  // replied to, so the reply goes out through the same number the
+  // lead has been talking to — not a freshly re-resolved (possibly
   // different) one. Falls back to normal resolution for older rows
   // saved before `channel_id` existed.
-  const channel = await resolveChannel(db, notification.account_id, {
-    channelId: notification.channel_id ?? undefined,
-    phoneForDdd: notification.channel_id ? undefined : contact.phone,
+  const channel = await resolveChannel(db, accountId, {
+    channelId: channelHint ?? undefined,
+    phoneForDdd: channelHint ? undefined : contact.phone,
   })
   if (!channel?.phone_number_id || !channel.access_token) {
-    console.error('[relay-engine] no Meta channel for account:', notification.account_id)
-    return true
+    console.error('[relay-engine] no Meta channel for account:', accountId)
+    return
   }
   const accessToken = decrypt(channel.access_token)
 
@@ -76,7 +145,7 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
       const media = message[kind as 'image' | 'video' | 'document' | 'audio']
       if (!media?.id) {
         console.error('[relay-engine] media message missing id:', message.type)
-        return true
+        return
       }
       const caption =
         kind === 'image' || kind === 'video' || kind === 'document'
@@ -105,7 +174,7 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
       const text = message.text?.body
       if (!text) {
         console.warn('[relay-engine] unsupported relay message type:', message.type)
-        return true
+        return
       }
       const result = await sendTextMessage({
         phoneNumberId: channel.phone_number_id,
@@ -142,26 +211,4 @@ export async function tryRelayFromAgent(message: WhatsAppMessage): Promise<boole
   } catch (err) {
     console.error('[relay-engine] failed to relay agent message to customer:', err)
   }
-
-  return true
-}
-
-/**
- * True if `senderPhone` (already `normalizePhone`-d, as the webhook
- * does for every inbound message) matches a `profiles.personal_phone`
- * for an agent on this account. Used to drop a stray non-quoted
- * message from an agent's own number instead of creating a contact
- * for them.
- */
-export async function isKnownAgentPhone(accountId: string, senderPhone: string): Promise<boolean> {
-  const db = supabaseAdmin()
-  const { data: agents } = await db
-    .from('profiles')
-    .select('personal_phone')
-    .eq('account_id', accountId)
-    .not('personal_phone', 'is', null)
-  if (!agents || agents.length === 0) return false
-  return agents.some(
-    (a) => a.personal_phone && normalizePhone(a.personal_phone) === senderPhone,
-  )
 }

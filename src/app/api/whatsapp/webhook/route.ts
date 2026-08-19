@@ -13,7 +13,7 @@ import {
   handleTemplateWebhookChange,
   isTemplateWebhookField,
 } from '@/lib/whatsapp/template-webhook'
-import { tryRelayFromAgent, isKnownAgentPhone } from '@/lib/whatsapp/relay-engine'
+import { tryRelayFromAgent, tryRelayFromAgentByAssignment } from '@/lib/whatsapp/relay-engine'
 import { forwardCustomerReplyToAgent } from '@/lib/whatsapp/relay-notify'
 import { maybeDistributeNewLead } from '@/lib/contacts/assign-lead'
 
@@ -622,15 +622,14 @@ async function processMessage(
   const contactName = contact.profile.name
 
   // Relay Proxy edge case: the agent messaged the official number
-  // directly (no quote), so tryRelayFromAgent above didn't match
-  // anything. Drop it rather than creating a contact for the agent
-  // themselves — they need to quote-reply to route to a lead.
-  if (await isKnownAgentPhone(accountId, senderPhone)) {
-    console.warn(
-      `[webhook] message from known agent phone ${senderPhone} without a quoted reply — dropped, not creating a contact.`,
-    )
-    return
-  }
+  // directly without quote-replying, so tryRelayFromAgent above didn't
+  // match anything. Before giving up, tryRelayFromAgentByAssignment
+  // checks whether this is a known agent phone with exactly one open
+  // conversation assigned to them — if so it relays there anyway, so a
+  // forgotten quote-reply doesn't fragment the customer's chat into a
+  // second thread. Either way (relayed, ambiguous, or not an agent
+  // phone at all) it never creates a contact for the agent themselves.
+  if (await tryRelayFromAgentByAssignment(accountId, senderPhone, message)) return
 
   // Find or create contact
   const contactOutcome = await findOrCreateContact(

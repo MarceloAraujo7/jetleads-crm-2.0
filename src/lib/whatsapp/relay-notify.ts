@@ -105,6 +105,23 @@ export async function notifyAgentOfHandoff(
       meta_message_id: result.messageId,
       channel_id: channelId,
     })
+
+    // Best-effort instructional follow-up, free-form (rides the session
+    // window the template just opened, so it needs no Meta approval and
+    // can say exactly what the approved template can't). Only matters
+    // when the agent has more than one lead going at once — with a
+    // single active conversation, a reply relays automatically even
+    // without quoting (see tryRelayFromAgentByAssignment in relay-engine.ts).
+    try {
+      await sendTextMessage({
+        phoneNumberId,
+        accessToken,
+        to: agentPhone,
+        text: 'Você pode responder digitando aqui mesmo. Se estiver atendendo mais de um cliente ao mesmo tempo, toque e segure a mensagem do cliente certo e escolha "Responder" antes de digitar, pra garantir que a resposta vá pra pessoa certa.',
+      })
+    } catch (err) {
+      console.error('[relay-notify] failed to send follow-up instructions:', err)
+    }
   } catch (err) {
     console.error('[relay-notify] failed to notify agent:', err)
   }
