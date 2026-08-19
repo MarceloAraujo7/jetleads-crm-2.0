@@ -1987,7 +1987,13 @@
       "signOutEverywhere": "Sign out everywhere",
       "signOutFailed": "Sign-out failed: {message}",
       "whatsappTitle": "Your WhatsApp number",
-      "whatsappDesc": "Connect your own official WhatsApp number to send and receive messages as yourself."
+      "whatsappDesc": "Connect your own official WhatsApp number to send and receive messages as yourself.",
+      "phone": "Phone",
+      "phonePlaceholder": "+1 555 123 4567",
+      "phoneHint": "Used to forward lead replies to you when connected via the official API.",
+      "cropTitle": "Adjust photo",
+      "cropDesc": "Drag to reposition and use the zoom to frame the shot.",
+      "cropApply": "Apply"
     },
     "appearance": {
       "title": "Appearance",

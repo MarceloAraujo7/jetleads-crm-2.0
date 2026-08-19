@@ -1987,7 +1987,13 @@
       "signOutEverywhere": "Sair de todos os lugares",
       "signOutFailed": "Falha ao sair: {message}",
       "whatsappTitle": "Seu número de WhatsApp",
-      "whatsappDesc": "Conecte seu próprio número oficial de WhatsApp pra enviar e receber mensagens como você mesmo."
+      "whatsappDesc": "Conecte seu próprio número oficial de WhatsApp pra enviar e receber mensagens como você mesmo.",
+      "phone": "Telefone",
+      "phonePlaceholder": "+55 11 91234-5678",
+      "phoneHint": "Usado para encaminhar respostas de leads quando você estiver conectado via API oficial.",
+      "cropTitle": "Ajustar foto",
+      "cropDesc": "Arraste para posicionar e use o zoom para enquadrar.",
+      "cropApply": "Aplicar"
     },
     "appearance": {
       "title": "Aparência",

@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server'
-import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account'
-import { decrypt } from '@/lib/whatsapp/encryption'
-import { verifyPhoneNumber } from '@/lib/whatsapp/meta-api'
+import { NextResponse } from 'next/server';
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { decrypt } from '@/lib/whatsapp/encryption';
+import { verifyPhoneNumber } from '@/lib/whatsapp/meta-api';
 
 const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * GET /api/whatsapp/channels/[id]/test
@@ -15,15 +15,18 @@ const UUID_RE =
  */
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ id: string }> },
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await context.params
+    const { id } = await context.params;
     if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: 'Invalid channel id.' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Invalid channel id.' },
+        { status: 400 }
+      );
     }
 
-    const { supabase, accountId } = await getCurrentAccount()
+    const { supabase, accountId } = await getCurrentAccount();
 
     const { data: config, error: configError } = await supabase
       .from('whatsapp_channels')
@@ -31,27 +34,38 @@ export async function GET(
       .eq('id', id)
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
-      .maybeSingle()
+      .maybeSingle();
 
     if (configError) {
-      console.error('Error fetching whatsapp_channels:', configError)
+      console.error('Error fetching whatsapp_channels:', configError);
       return NextResponse.json(
-        { connected: false, reason: 'db_error', message: 'Failed to fetch configuration' },
-        { status: 200 },
-      )
+        {
+          connected: false,
+          reason: 'db_error',
+          message: 'Failed to fetch configuration',
+        },
+        { status: 200 }
+      );
     }
     if (!config || !config.access_token || !config.phone_number_id) {
       return NextResponse.json(
-        { connected: false, reason: 'no_config', message: 'Channel not found or incomplete.' },
-        { status: 200 },
-      )
+        {
+          connected: false,
+          reason: 'no_config',
+          message: 'Channel not found or incomplete.',
+        },
+        { status: 200 }
+      );
     }
 
-    let accessToken: string
+    let accessToken: string;
     try {
-      accessToken = decrypt(config.access_token)
+      accessToken = decrypt(config.access_token);
     } catch (err) {
-      console.error('[whatsapp/channels/[id]/test] Token decryption failed:', err)
+      console.error(
+        '[whatsapp/channels/[id]/test] Token decryption failed:',
+        err
+      );
       return NextResponse.json(
         {
           connected: false,
@@ -60,25 +74,43 @@ export async function GET(
           message:
             'The stored access token cannot be decrypted with the current ENCRYPTION_KEY. Re-enter the credentials for this number.',
         },
-        { status: 200 },
-      )
+        { status: 200 }
+      );
     }
 
     try {
       const phoneInfo = await verifyPhoneNumber({
         phoneNumberId: config.phone_number_id,
         accessToken,
-      })
-      return NextResponse.json({ connected: true, phone_info: phoneInfo })
+      });
+      // Backfill the human-readable number on the row — the list view
+      // only reads from the DB, so a channel saved before this field
+      // existed stays blank there until its next health check.
+      await supabase
+        .from('whatsapp_channels')
+        .update({
+          display_phone_number: phoneInfo?.display_phone_number ?? null,
+          verified_name: phoneInfo?.verified_name ?? null,
+        })
+        .eq('id', id);
+      return NextResponse.json({ connected: true, phone_info: phoneInfo });
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown Meta API error'
-      console.error('[whatsapp/channels/[id]/test] Meta API verification failed:', message)
+      const message =
+        err instanceof Error ? err.message : 'Unknown Meta API error';
+      console.error(
+        '[whatsapp/channels/[id]/test] Meta API verification failed:',
+        message
+      );
       return NextResponse.json(
-        { connected: false, reason: 'meta_api_error', message: `Meta API rejected the credentials: ${message}` },
-        { status: 200 },
-      )
+        {
+          connected: false,
+          reason: 'meta_api_error',
+          message: `Meta API rejected the credentials: ${message}`,
+        },
+        { status: 200 }
+      );
     }
   } catch (error) {
-    return toErrorResponse(error)
+    return toErrorResponse(error);
   }
 }

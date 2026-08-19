@@ -5,6 +5,8 @@ export interface ChannelListItem {
   is_default: boolean;
   assigned_agent_id: string | null;
   phone_number_id: string | null;
+  display_phone_number: string | null;
+  verified_name: string | null;
   waba_id: string | null;
   status: string;
   registered_at: string | null;

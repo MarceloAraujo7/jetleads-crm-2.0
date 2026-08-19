@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server'
-import { createClient as createAdminClient } from '@supabase/supabase-js'
-import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account'
-import { hasMinRole } from '@/lib/auth/roles'
-import { saveMetaChannel } from '@/lib/whatsapp/channel-save'
+import { NextResponse } from 'next/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { hasMinRole } from '@/lib/auth/roles';
+import { saveMetaChannel } from '@/lib/whatsapp/channel-save';
 
 /**
  * Multi-number Meta Cloud channel list/create.
@@ -19,15 +19,15 @@ import { saveMetaChannel } from '@/lib/whatsapp/channel-save'
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _adminClient: any = null
+let _adminClient: any = null;
 function supabaseAdmin() {
   if (!_adminClient) {
     _adminClient = createAdminClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    )
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
   }
-  return _adminClient
+  return _adminClient;
 }
 
 /**
@@ -43,26 +43,29 @@ function supabaseAdmin() {
  */
 export async function GET() {
   try {
-    const { supabase, accountId } = await getCurrentAccount()
+    const { supabase, accountId } = await getCurrentAccount();
 
     const { data, error } = await supabase
       .from('whatsapp_channels')
       .select(
-        'id, label, ddd, is_default, assigned_agent_id, phone_number_id, waba_id, status, registered_at, subscribed_apps_at, last_registration_error, connected_at, created_at',
+        'id, label, ddd, is_default, assigned_agent_id, phone_number_id, waba_id, status, registered_at, subscribed_apps_at, last_registration_error, connected_at, created_at, display_phone_number, verified_name'
       )
       .eq('account_id', accountId)
       .eq('provider', 'meta_cloud')
       .order('is_default', { ascending: false })
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Error listing whatsapp_channels:', error)
-      return NextResponse.json({ error: 'Failed to load channels' }, { status: 500 })
+      console.error('Error listing whatsapp_channels:', error);
+      return NextResponse.json(
+        { error: 'Failed to load channels' },
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({ channels: data ?? [] })
+    return NextResponse.json({ channels: data ?? [] });
   } catch (error) {
-    return toErrorResponse(error)
+    return toErrorResponse(error);
   }
 }
 
@@ -84,20 +87,31 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const { supabase, accountId, userId, role } = await getCurrentAccount()
+    const { supabase, accountId, userId, role } = await getCurrentAccount();
     if (!hasMinRole(role, 'agent')) {
-      return NextResponse.json({ error: "This action requires the 'agent' role or higher" }, { status: 403 })
+      return NextResponse.json(
+        { error: "This action requires the 'agent' role or higher" },
+        { status: 403 }
+      );
     }
-    const isAdmin = hasMinRole(role, 'admin')
+    const isAdmin = hasMinRole(role, 'admin');
 
-    const body = await request.json()
-    const { phone_number_id, waba_id, access_token, verify_token, pin, label, ddd } = body
+    const body = await request.json();
+    const {
+      phone_number_id,
+      waba_id,
+      access_token,
+      verify_token,
+      pin,
+      label,
+      ddd,
+    } = body;
 
     const { count } = await supabase
       .from('whatsapp_channels')
       .select('id', { count: 'exact', head: true })
       .eq('account_id', accountId)
-      .eq('provider', 'meta_cloud')
+      .eq('provider', 'meta_cloud');
 
     const result = await saveMetaChannel({
       db: supabase,
@@ -116,10 +130,13 @@ export async function POST(request: Request) {
       // path, see PATCH .../[id] `set_default`).
       makeDefault: isAdmin && !count,
       assignedAgentId: isAdmin ? undefined : userId,
-    })
+    });
 
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status })
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status }
+      );
     }
 
     if (result.registration_error) {
@@ -130,7 +147,7 @@ export async function POST(request: Request) {
         channel_id: result.channelId,
         registration_error: result.registration_error,
         phone_info: result.phone_info,
-      })
+      });
     }
 
     return NextResponse.json({
@@ -140,8 +157,8 @@ export async function POST(request: Request) {
       registered: result.registered,
       registration_skipped: result.registration_skipped,
       phone_info: result.phone_info,
-    })
+    });
   } catch (error) {
-    return toErrorResponse(error)
+    return toErrorResponse(error);
   }
 }
