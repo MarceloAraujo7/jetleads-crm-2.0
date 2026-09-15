@@ -5,9 +5,32 @@ import { cn } from "@/lib/utils";
 import type { TemplateButton } from "@/types";
 import { useTranslations } from "next-intl";
 
+/**
+ * Substitutes both variable notations that can reach this preview:
+ * Meta's positional `{{1}}`/`{{2}}` (what a saved template's body_text
+ * actually stores, e.g. when the template list previews an existing
+ * template) and the wizard's friendly `[name]` syntax (what the
+ * editor's live textarea holds while a template is being authored —
+ * see template-variable-names.ts). `samples` is ordered to match
+ * each: positionally for `{{n}}`, and by first-appearance order for
+ * `[name]` (mirroring extractNamedVariables's dedup order), so a name
+ * reused later in the text still resolves to its first index instead
+ * of being treated as a new, unmapped variable.
+ */
 function renderWithSamples(text: string, samples: string[]): string {
-  return text.replace(/\{\{(\d+)\}\}/g, (match, n: string) => {
-    const value = samples[Number(n) - 1];
+  const seenNames: string[] = [];
+  return text.replace(/\{\{(\d+)\}\}|\[([a-zA-Z0-9_]+)\]/g, (match, position?: string, name?: string) => {
+    let index: number;
+    if (position !== undefined) {
+      index = Number(position) - 1;
+    } else {
+      index = seenNames.indexOf(name!);
+      if (index === -1) {
+        index = seenNames.length;
+        seenNames.push(name!);
+      }
+    }
+    const value = samples[index];
     return value?.trim() ? value : match;
   });
 }

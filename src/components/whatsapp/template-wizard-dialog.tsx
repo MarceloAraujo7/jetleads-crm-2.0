@@ -100,6 +100,7 @@ export function TemplateWizardDialog({
   const [headerSample, setHeaderSample] = useState("");
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const headerFileRef = useRef<HTMLInputElement>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [bodyText, setBodyText] = useState("");
   const [bodySamplesByName, setBodySamplesByName] = useState<Record<string, string>>({});
@@ -191,7 +192,27 @@ export function TemplateWizardDialog({
 
   function insertBodyVariable() {
     const nextName = `variavel_${bodyVarNames.length + 1}`;
-    setBodyText((prev) => `${prev}${prev && !prev.endsWith(" ") ? " " : ""}[${nextName}]`);
+    const token = `[${nextName}]`;
+    const el = bodyTextareaRef.current;
+    // Insert at the caret (replacing any selection) instead of always
+    // appending — the user is usually positioned mid-sentence where
+    // the variable actually belongs, not at the end of the text.
+    // selectionStart/End persist on the element even after the button
+    // click below moves focus away from the textarea, so this still
+    // targets wherever the user last placed the caret.
+    if (el) {
+      const start = el.selectionStart ?? bodyText.length;
+      const end = el.selectionEnd ?? bodyText.length;
+      const next = bodyText.slice(0, start) + token + bodyText.slice(end);
+      setBodyText(next);
+      const caretPos = start + token.length;
+      requestAnimationFrame(() => {
+        el.focus();
+        el.setSelectionRange(caretPos, caretPos);
+      });
+    } else {
+      setBodyText((prev) => `${prev}${prev && !prev.endsWith(" ") ? " " : ""}${token}`);
+    }
   }
 
   function insertHeaderVariable() {
@@ -586,6 +607,7 @@ export function TemplateWizardDialog({
                       </span>
                     </div>
                     <Textarea
+                      ref={bodyTextareaRef}
                       value={bodyText}
                       onChange={(e) => setBodyText(e.target.value)}
                       maxLength={TEMPLATE_LIMITS.bodyMaxLength}
