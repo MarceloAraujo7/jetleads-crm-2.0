@@ -741,7 +741,8 @@
       "toastCreated": "Campanha criada",
       "toastFailed": "Falha ao salvar a campanha",
       "toastFailedDelete": "Falha ao excluir a campanha",
-      "toastDeleted": "Campanha excluída"
+      "toastDeleted": "Campanha excluída",
+      "estimatedCostShort": "até US$ {usd} (≈ R$ {brl})"
     }
   },
   "Pipelines": {
@@ -1017,7 +1018,8 @@
         "errorLoadTags": "Falha ao carregar tags",
         "errorLoadFields": "Falha ao carregar campos personalizados",
         "errorCsvParse": "Não foi possível processar o arquivo CSV.",
-        "errorCsvMissingPhone": "O CSV precisa ter uma coluna 'phone'."
+        "errorCsvMissingPhone": "O CSV precisa ter uma coluna 'phone'.",
+        "estimatedCost": "Custo máximo estimado: US$ {usd} (≈ R$ {brl})"
       },
       "personalize": {
         "title": "Personalizar variáveis",
@@ -1083,7 +1085,29 @@
         "toastFailedPreview": "Falha ao carregar dados de pré-visualização",
         "sendFromNumber": "Enviar pelo número",
         "sendFromDefault": "Padrão da conta",
-        "sendFromDefaultTag": "padrão"
+        "sendFromDefaultTag": "padrão",
+        "estimatedReach": "Alcance estimado",
+        "language": "Idioma",
+        "costCardBadge": "Resumo financeiro da campanha",
+        "costCardTitle": "Custo máximo estimado",
+        "costCardSubtitle": "Base de envio: {count} contatos selecionados",
+        "costRateLabel": "Tarifa unitária Meta",
+        "costExchangeLabel": "Câmbio utilizado",
+        "costExchangeEdit": "Editar câmbio",
+        "costExchangeSave": "Salvar",
+        "costExchangeSaved": "Câmbio atualizado",
+        "costExchangeSaveFailed": "Falha ao atualizar o câmbio",
+        "costRulesTitle": "Regras de higienização e cobrança Meta",
+        "costRuleDedup": "Descarte automático de duplicados e inválidos: números repetidos não são cobrados duas vezes.",
+        "costRuleBilling": "Cobrado à parte da mensalidade do CRM: o valor das conversas de WhatsApp é faturado de acordo com as mensagens efetivamente entregues pela Meta Cloud API.",
+        "costRuleCeiling": "Teto de estimativa: o valor acima é o custo máximo na pior hipótese tarifária. Se o contato já tiver uma janela de conversa de serviço aberta, o custo real será menor.",
+        "consentLabel": "Estou ciente de que este disparo tem custo adicional de US$ {usd} (≈ R$ {brl}), cobrado à parte da mensalidade do CRM, e autorizo este envio.",
+        "confirmTitle": "Confirmar disparo",
+        "confirmDescBefore": "Você está prestes a enviar este disparo para",
+        "confirmDescContacts": "contatos",
+        "confirmDescUsing": "usando o modelo",
+        "confirmDescAfter": "Esta ação não pode ser desfeita.",
+        "consentRequiredHint": "Marque a confirmação de custo acima para habilitar o envio."
       }
     }
   },

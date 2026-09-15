@@ -44,6 +44,9 @@ interface AccountSummary {
   /** Default deal currency (ISO-4217). NOT NULL DEFAULT 'USD' in the
    *  DB (migration 021); narrowed to DEFAULT_CURRENCY when absent. */
   default_currency: string;
+  /** USD→BRL rate used to convert Meta's per-message broadcast cost
+   *  estimate into a local-currency figure (migration 054). */
+  whatsapp_usd_brl_rate: number;
 }
 
 interface AuthContextValue {
@@ -170,9 +173,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.account_id) {
           const { data: account, error: accountErr } = await supabase
             .from('accounts')
-            // default_currency added in migration 021; narrowed to the
-            // USD fallback below for older schemas where it reads null.
-            .select('id, name, default_currency')
+            // default_currency added in migration 021, whatsapp_usd_brl_rate
+            // in migration 054; both narrowed to a fallback below for
+            // older schemas where they read null.
+            .select('id, name, default_currency, whatsapp_usd_brl_rate')
             .eq('id', data.account_id)
             .maybeSingle();
           if (accountErr) {
@@ -187,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               id: account.id,
               name: account.name,
               default_currency: account.default_currency ?? DEFAULT_CURRENCY,
+              whatsapp_usd_brl_rate: account.whatsapp_usd_brl_rate ?? 5.3,
             };
           }
         }

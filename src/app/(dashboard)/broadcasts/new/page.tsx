@@ -248,6 +248,7 @@ export default function NewBroadcastPage() {
               onUpdate={setAudience}
               onNext={() => setCurrentStep(2)}
               onBack={() => setCurrentStep(0)}
+              template={template}
             />
           )}
           {currentStep === 2 && template && (

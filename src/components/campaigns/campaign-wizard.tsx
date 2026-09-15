@@ -41,6 +41,7 @@ import { ImportModal } from "@/components/contacts/import-modal";
 import { InviteMemberDialog } from "@/components/settings/invite-member-dialog";
 import { useBroadcastSending } from "@/hooks/use-broadcast-sending";
 import { extractVariableIndices } from "@/lib/whatsapp/template-validators";
+import { estimateBroadcastCost } from "@/lib/whatsapp/meta-pricing";
 
 interface EntityOption {
   id: string;
@@ -123,7 +124,7 @@ export function CampaignWizard({
   const tType = useTranslations("Campaigns.actionType");
   const router = useRouter();
   const supabase = createClient();
-  const { accountId } = useAuth();
+  const { accountId, account } = useAuth();
 
   const [name, setName] = useState(campaign?.name ?? "");
   const [audienceLabel, setAudienceLabel] = useState(campaign?.audience_label ?? "");
@@ -389,6 +390,11 @@ export function CampaignWizard({
   // IA (Fluxo) get their own dedicated steps; automation/agent share
   // the catch-all "Outras ações" step.
   const broadcastRows = useMemo(() => rows.filter((r) => r.action_type === "broadcast"), [rows]);
+  const estimateRowCost = useCallback(
+    (tpl: MessageTemplate, count: number) =>
+      estimateBroadcastCost(count, tpl.category, account?.whatsapp_usd_brl_rate ?? 5.3),
+    [account],
+  );
   const flowRows = useMemo(() => rows.filter((r) => r.action_type === "flow"), [rows]);
   const otherRows = useMemo(
     () => rows.filter((r) => r.action_type === "automation" || r.action_type === "agent"),
@@ -858,6 +864,14 @@ export function CampaignWizard({
                                 <Users className="h-3.5 w-3.5" />
                                 {t("recipientsPreview", { count: liveContactCount ?? 0 })}
                               </p>
+                              {selectedTemplate && (
+                                <p className="text-xs font-medium text-primary">
+                                  {t("estimatedCostShort", {
+                                    usd: estimateRowCost(selectedTemplate, liveContactCount ?? 0).costUsd.toFixed(2),
+                                    brl: estimateRowCost(selectedTemplate, liveContactCount ?? 0).costBrl.toFixed(2),
+                                  })}
+                                </p>
+                              )}
                               <Button
                                 type="button"
                                 variant="outline"
@@ -900,10 +914,18 @@ export function CampaignWizard({
                                 {t("recipientsPreview", { count: liveContactCount ?? 0 })}
                               </p>
                               {selectedTemplate && (
-                                <p className="flex items-center gap-1.5 text-xs text-primary">
-                                  <Send className="h-3.5 w-3.5" />
-                                  {t("broadcastWillSendOnStart")}
-                                </p>
+                                <>
+                                  <p className="text-xs font-medium text-primary">
+                                    {t("estimatedCostShort", {
+                                      usd: estimateRowCost(selectedTemplate, liveContactCount ?? 0).costUsd.toFixed(2),
+                                      brl: estimateRowCost(selectedTemplate, liveContactCount ?? 0).costBrl.toFixed(2),
+                                    })}
+                                  </p>
+                                  <p className="flex items-center gap-1.5 text-xs text-primary">
+                                    <Send className="h-3.5 w-3.5" />
+                                    {t("broadcastWillSendOnStart")}
+                                  </p>
+                                </>
                               )}
                             </>
                           )}

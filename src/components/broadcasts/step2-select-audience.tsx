@@ -19,6 +19,9 @@ import {
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { parseContactCsv } from '@/lib/contacts/parse-contact-csv';
+import { useAuth } from '@/hooks/use-auth';
+import { estimateBroadcastCost } from '@/lib/whatsapp/meta-pricing';
+import type { MessageTemplate } from '@/types';
 
 /**
  * Mirrors the encoding fallback in the Leads import modal
@@ -58,6 +61,9 @@ interface Step2Props {
   onUpdate: (audience: AudienceConfig) => void;
   onNext: () => void;
   onBack: () => void;
+  /** Drives the cost preview below the recipient count — optional so
+   *  this step still renders before a template is picked upstream. */
+  template?: MessageTemplate | null;
 }
 
 export function Step2SelectAudience({
@@ -65,8 +71,15 @@ export function Step2SelectAudience({
   onUpdate,
   onNext,
   onBack,
+  template,
 }: Step2Props) {
   const t = useTranslations('Broadcasts.wizard');
+  const { account } = useAuth();
+  const usdToBrlRate = account?.whatsapp_usd_brl_rate ?? 5.3;
+  const estimatedCostForCount = useCallback(
+    (count: number) => estimateBroadcastCost(count, template?.category, usdToBrlRate),
+    [template, usdToBrlRate],
+  );
 
   const OPERATOR_OPTIONS = useMemo<{ value: CustomFieldOperator; label: string }[]>(() => [
     { value: 'is', label: t('selectAudience.operatorIs') },
@@ -587,14 +600,24 @@ export function Step2SelectAudience({
             <span className="text-xs text-muted-foreground">{t('selectAudience.calculating')}</span>
           </div>
         ) : estimatedCount !== null ? (
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            <span className="text-sm text-foreground">
-              {estimatedCount.toLocaleString()}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {t('selectAudience.estimatedRecipients')}
-            </span>
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm text-foreground">
+                {estimatedCount.toLocaleString()}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {t('selectAudience.estimatedRecipients')}
+              </span>
+            </div>
+            {template && (
+              <p className="text-xs font-medium text-primary">
+                {t('selectAudience.estimatedCost', {
+                  usd: estimatedCostForCount(estimatedCount).costUsd.toFixed(2),
+                  brl: estimatedCostForCount(estimatedCount).costBrl.toFixed(2),
+                })}
+              </p>
+            )}
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">

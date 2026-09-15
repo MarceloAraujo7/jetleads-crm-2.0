@@ -741,7 +741,8 @@
       "toastCreated": "Campaign created",
       "toastFailed": "Failed to save campaign",
       "toastFailedDelete": "Failed to delete campaign",
-      "toastDeleted": "Campaign deleted"
+      "toastDeleted": "Campaign deleted",
+      "estimatedCostShort": "up to US$ {usd} (≈ R$ {brl})"
     }
   },
   "Pipelines": {
@@ -1017,7 +1018,8 @@
         "errorLoadTags": "Failed to load tags",
         "errorLoadFields": "Failed to load custom fields",
         "errorCsvParse": "Could not parse CSV file.",
-        "errorCsvMissingPhone": "CSV must have a 'phone' column."
+        "errorCsvMissingPhone": "CSV must have a 'phone' column.",
+        "estimatedCost": "Maximum estimated cost: US$ {usd} (≈ R$ {brl})"
       },
       "personalize": {
         "title": "Personalize Variables",
@@ -1083,7 +1085,29 @@
         "toastFailedPreview": "Failed to load preview data",
         "sendFromNumber": "Send from number",
         "sendFromDefault": "Account default",
-        "sendFromDefaultTag": "default"
+        "sendFromDefaultTag": "default",
+        "estimatedReach": "Estimated reach",
+        "language": "Language",
+        "costCardBadge": "Campaign financial summary",
+        "costCardTitle": "Maximum estimated cost",
+        "costCardSubtitle": "Sending base: {count} selected contacts",
+        "costRateLabel": "Meta unit rate",
+        "costExchangeLabel": "Exchange rate used",
+        "costExchangeEdit": "Edit rate",
+        "costExchangeSave": "Save",
+        "costExchangeSaved": "Exchange rate updated",
+        "costExchangeSaveFailed": "Failed to update the exchange rate",
+        "costRulesTitle": "Meta's cleanup and billing rules",
+        "costRuleDedup": "Automatic dedup/invalid discard: repeated numbers are never billed twice.",
+        "costRuleBilling": "Billed separately from the CRM subscription: WhatsApp conversation cost is invoiced based on messages actually delivered by the Meta Cloud API.",
+        "costRuleCeiling": "Estimate ceiling: the amount above is the worst-case maximum cost. If the contact already has an open service window, the real cost will be lower.",
+        "consentLabel": "I understand this broadcast has an additional cost of US$ {usd} (≈ R$ {brl}), billed separately from the CRM subscription, and I authorize this send.",
+        "confirmTitle": "Confirm broadcast",
+        "confirmDescBefore": "You are about to send this broadcast to",
+        "confirmDescContacts": "contacts",
+        "confirmDescUsing": "using the",
+        "confirmDescAfter": "This action cannot be undone.",
+        "consentRequiredHint": "Check the cost acknowledgment above to enable sending."
       }
     }
   },

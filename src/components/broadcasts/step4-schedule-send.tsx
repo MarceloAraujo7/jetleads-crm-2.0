@@ -14,7 +14,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
+import { ArrowLeft, Send, Loader2, Users, Save, DollarSign, CheckCircle2, AlertTriangle, Pencil } from 'lucide-react';
+import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 import {
   Select,
@@ -23,6 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/hooks/use-auth';
+import { hasMinRole } from '@/lib/auth/roles';
+import { estimateBroadcastCost } from '@/lib/whatsapp/meta-pricing';
 
 interface AudienceConfig {
   type: string;
@@ -66,10 +70,43 @@ export function Step4ScheduleSend({
   progress,
 }: Step4Props) {
   const t = useTranslations('Broadcasts.wizard');
+  const { account, accountRole, refreshProfile } = useAuth();
+  const canEditRate = hasMinRole(accountRole ?? 'viewer', 'admin');
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
   const [channels, setChannels] = useState<ChannelOption[]>([]);
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [editingRate, setEditingRate] = useState(false);
+  const [rateInput, setRateInput] = useState('');
+  const [savingRate, setSavingRate] = useState(false);
+
+  const usdToBrlRate = account?.whatsapp_usd_brl_rate ?? 5.3;
+  const costEstimate = estimateBroadcastCost(estimatedReach, template.category, usdToBrlRate);
+
+  async function handleSaveRate() {
+    const parsed = Number(rateInput.replace(',', '.'));
+    if (!account || !Number.isFinite(parsed) || parsed <= 0) return;
+    setSavingRate(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('accounts')
+        .update({ whatsapp_usd_brl_rate: parsed })
+        .eq('id', account.id);
+      if (error) {
+        toast.error(t('scheduleSend.costExchangeSaveFailed'));
+        return;
+      }
+      toast.success(t('scheduleSend.costExchangeSaved'));
+      await refreshProfile();
+      setEditingRate(false);
+    } catch {
+      toast.error(t('scheduleSend.costExchangeSaveFailed'));
+    } finally {
+      setSavingRate(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -200,7 +237,7 @@ export function Step4ScheduleSend({
             <p className="text-foreground">{audienceLabel}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Estimated Reach</p>
+            <p className="text-xs text-muted-foreground">{t('scheduleSend.estimatedReach')}</p>
             <div className="flex items-center gap-1.5">
               {loadingReach ? (
                 <Loader2 className="h-3 w-3 animate-spin text-primary" />
@@ -213,11 +250,110 @@ export function Step4ScheduleSend({
             </div>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Language</p>
+            <p className="text-xs text-muted-foreground">{t('scheduleSend.language')}</p>
             <p className="text-foreground">{template.language ?? 'en_US'}</p>
           </div>
         </div>
       </div>
+
+      {/* Cost estimate — Meta's official per-message pricing by
+          template category, ceiling estimate (see meta-pricing.ts). */}
+      <div className="rounded-2xl border-2 border-primary/40 bg-primary-soft p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <span className="inline-flex items-center rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">
+              {t('scheduleSend.costCardBadge')}
+            </span>
+            <h3 className="mt-2 text-lg font-bold text-foreground">{t('scheduleSend.costCardTitle')}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('scheduleSend.costCardSubtitle', { count: estimatedReach.toLocaleString() })}
+            </p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-extrabold text-primary">US$ {costEstimate.costUsd.toFixed(2)}</div>
+            <div className="text-base font-semibold text-emerald-500">≈ R$ {costEstimate.costBrl.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid grid-cols-1 gap-3 border-t border-primary/20 pt-4 text-sm sm:grid-cols-3">
+          <div>
+            <span className="text-xs text-muted-foreground">{t('scheduleSend.template')}</span>
+            <p className="font-medium text-foreground">{template.name}</p>
+          </div>
+          <div>
+            <span className="text-xs text-muted-foreground">{t('scheduleSend.costRateLabel')}</span>
+            <p className="font-medium text-foreground">US$ {costEstimate.ratePerMessageUsd.toFixed(4)}</p>
+          </div>
+          <div>
+            <span className="text-xs text-muted-foreground">{t('scheduleSend.costExchangeLabel')}</span>
+            {editingRate ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <Input
+                  value={rateInput}
+                  onChange={(e) => setRateInput(e.target.value)}
+                  className="h-7 w-20 border-border bg-muted px-2 text-xs text-foreground"
+                  autoFocus
+                />
+                <Button size="sm" className="h-7 px-2 text-xs" disabled={savingRate} onClick={handleSaveRate}>
+                  {savingRate ? <Loader2 className="h-3 w-3 animate-spin" /> : t('scheduleSend.costExchangeSave')}
+                </Button>
+              </div>
+            ) : (
+              <p className="flex items-center gap-1.5 font-medium text-foreground">
+                US$ 1,00 = R$ {usdToBrlRate.toFixed(2)}
+                {canEditRate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRateInput(String(usdToBrlRate));
+                      setEditingRate(true);
+                    }}
+                    title={t('scheduleSend.costExchangeEdit')}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Meta billing rules */}
+      <div className="rounded-xl border border-border bg-card/50 p-4">
+        <h4 className="mb-3 text-sm font-semibold text-foreground">{t('scheduleSend.costRulesTitle')}</h4>
+        <div className="space-y-2.5">
+          <div className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+            <span>{t('scheduleSend.costRuleDedup')}</span>
+          </div>
+          <div className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <DollarSign className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+            <span>{t('scheduleSend.costRuleBilling')}</span>
+          </div>
+          <div className="flex items-start gap-2.5 text-sm text-muted-foreground">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <span>{t('scheduleSend.costRuleCeiling')}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Mandatory cost-consent checkbox — gates the send action below. */}
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-dashed border-border p-4 select-none">
+        <input
+          type="checkbox"
+          checked={consentAccepted}
+          onChange={(e) => setConsentAccepted(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-primary"
+        />
+        <span className="text-sm font-medium text-foreground">
+          {t('scheduleSend.consentLabel', {
+            usd: costEstimate.costUsd.toFixed(2),
+            brl: costEstimate.costBrl.toFixed(2),
+          })}
+        </span>
+      </label>
 
       {/* Processing overlay */}
       {isProcessing && (
@@ -266,7 +402,8 @@ export function Step4ScheduleSend({
           <DialogTrigger
             render={
               <Button
-                disabled={!name.trim() || isProcessing}
+                disabled={!name.trim() || !consentAccepted || isProcessing}
+                title={!consentAccepted ? t('scheduleSend.consentRequiredHint') : undefined}
                 className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               />
             }
@@ -276,13 +413,12 @@ export function Step4ScheduleSend({
           </DialogTrigger>
           <DialogContent className="border-border bg-popover sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-popover-foreground">Confirm Broadcast</DialogTitle>
+              <DialogTitle className="text-popover-foreground">{t('scheduleSend.confirmTitle')}</DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                You are about to send this broadcast to{' '}
+                {t('scheduleSend.confirmDescBefore')}{' '}
                 <span className="font-medium text-popover-foreground">{estimatedReach.toLocaleString()}</span>{' '}
-                contacts using the{' '}
-                <span className="font-medium text-popover-foreground">{template.name}</span> template.
-                This action cannot be undone.
+                {t('scheduleSend.confirmDescContacts')} {t('scheduleSend.confirmDescUsing')}{' '}
+                <span className="font-medium text-popover-foreground">{template.name}</span>. {t('scheduleSend.confirmDescAfter')}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
