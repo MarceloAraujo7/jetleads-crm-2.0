@@ -253,7 +253,7 @@ export function DealForm({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90vh,760px)] w-full flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground sm:max-w-lg">
-        <div className="flex h-full flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <DialogHeader className="shrink-0 border-b border-border/50 p-4">
             <DialogTitle className="text-popover-foreground">
               {deal ? t("editDeal") : t("newDeal")}

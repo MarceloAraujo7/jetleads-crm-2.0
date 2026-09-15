@@ -365,7 +365,7 @@ export function TemplateWizardDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(92vh,820px)] w-full flex-col gap-0 overflow-hidden bg-popover p-0 text-popover-foreground sm:max-w-3xl">
-        <div className="flex h-full flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           <div className="shrink-0 border-b border-border/50 p-4">
             <h2 className="text-base font-bold text-popover-foreground">
               {template ? t("editTitle") : t("newTitle")}
