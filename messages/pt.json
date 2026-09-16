@@ -2138,7 +2138,10 @@
       "deleteAgent": "Excluir agente",
       "deleteAgentConfirm": "Excluir \"{name}\"? Isso não pode ser desfeito.",
       "deleteAgentSuccess": "Agente excluído.",
-      "deleteAgentFailed": "Falha ao excluir o agente."
+      "deleteAgentFailed": "Falha ao excluir o agente.",
+      "usePlatformKey": "Usar modelo padrão do Jetleads",
+      "usePlatformKeyDesc": "Sem custo de configuração — usa o modelo mantido pelo Jetleads. Desative para usar sua própria chave de API.",
+      "platformKeyBadge": "Modelo padrão"
     },
     "aiKnowledge": {
       "loadFailed": "Falha ao carregar a base de conhecimento",

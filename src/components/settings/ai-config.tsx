@@ -32,6 +32,7 @@ interface AgentListItem {
   is_default: boolean;
   auto_reply_enabled: boolean;
   has_embeddings_key: boolean;
+  uses_platform_key: boolean;
 }
 
 const PURPOSE_LABEL_KEY: Record<string, string> = {
@@ -54,6 +55,7 @@ export function AiConfig() {
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AgentListItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [platformKeyAvailable, setPlatformKeyAvailable] = useState(false);
 
   const loadedAccountIdRef = useRef<string | null>(null);
 
@@ -67,6 +69,7 @@ export function AiConfig() {
         return;
       }
       setAgents(data.configs ?? []);
+      setPlatformKeyAvailable(data.platform_key_available === true);
     } catch {
       toast.error(t('loadFailedAgents'));
     } finally {
@@ -222,6 +225,11 @@ export function AiConfig() {
                     >
                       {agent.is_active ? t('activeBadge') : t('inactiveBadge')}
                     </span>
+                    {agent.uses_platform_key && (
+                      <span className="inline-flex items-center rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                        {t('platformKeyBadge')}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {agent.provider === 'openai' ? 'OpenAI' : 'Anthropic'} · {agent.model}
@@ -274,6 +282,7 @@ export function AiConfig() {
           agentId={editingId}
           cloneCandidates={cloneCandidates}
           members={members}
+          platformKeyAvailable={platformKeyAvailable}
           onSaved={fetchAgents}
         />
       )}

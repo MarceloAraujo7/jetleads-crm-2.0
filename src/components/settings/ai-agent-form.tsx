@@ -64,6 +64,10 @@ interface AiAgentFormProps {
   /** Other agents on the account, for the "reuse an existing setup" picker (create mode only). */
   cloneCandidates: AiAgentSummary[];
   members: AccountMember[];
+  /** Whether this deployment has a shared platform AI key at all — the
+   *  "use the Jetleads default" option only appears when it does; other
+   *  installs keep the BYOK-only flow untouched. */
+  platformKeyAvailable: boolean;
   onSaved: () => void;
 }
 
@@ -78,6 +82,7 @@ interface AgentDetail {
   auto_reply_max_per_conversation: number;
   handoff_agent_id: string | null;
   has_key: boolean;
+  uses_platform_key: boolean;
 }
 
 export function AiAgentForm({
@@ -86,6 +91,7 @@ export function AiAgentForm({
   agentId,
   cloneCandidates,
   members,
+  platformKeyAvailable,
   onSaved,
 }: AiAgentFormProps) {
   const t = useTranslations('Settings.aiConfig');
@@ -105,6 +111,7 @@ export function AiAgentForm({
   const [showKey, setShowKey] = useState(false);
   const [hasStoredKey, setHasStoredKey] = useState(false);
   const [showKeyFields, setShowKeyFields] = useState(true);
+  const [usePlatformKey, setUsePlatformKey] = useState(platformKeyAvailable);
   const [systemPrompt, setSystemPrompt] = useState('');
   const [isActive, setIsActive] = useState(false);
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
@@ -123,6 +130,7 @@ export function AiAgentForm({
       setKeyEdited(false);
       setHasStoredKey(false);
       setShowKeyFields(true);
+      setUsePlatformKey(platformKeyAvailable);
       setSystemPrompt('');
       setIsActive(false);
       setAutoReplyEnabled(false);
@@ -153,13 +161,14 @@ export function AiAgentForm({
         setApiKey(data.has_key ? MASKED_KEY : '');
         setKeyEdited(false);
         setShowKeyFields(false);
+        setUsePlatformKey(data.uses_platform_key);
       } catch {
         toast.error(t('loadFailed'));
       } finally {
         setLoading(false);
       }
     })();
-  }, [open, isNew, agentId, t]);
+  }, [open, isNew, agentId, t, platformKeyAvailable]);
 
   function applyPurposePreset(next: Purpose) {
     setPurpose(next);
@@ -206,13 +215,16 @@ export function AiAgentForm({
       toast.error(t('missingName'));
       return;
     }
-    if (showKeyFields && !model.trim() && !cloneFromId) {
-      toast.error(t('missingModel'));
-      return;
-    }
-    if (isNew && !cloneFromId && !keyEdited) {
-      toast.error(t('missingApiKey'));
-      return;
+    const isCloning = isNew && !!cloneFromId;
+    if (!isCloning && !usePlatformKey) {
+      if (showKeyFields && !model.trim()) {
+        toast.error(t('missingModel'));
+        return;
+      }
+      if (isNew && !keyEdited) {
+        toast.error(t('missingApiKey'));
+        return;
+      }
     }
     setSaving(true);
     try {
@@ -225,8 +237,10 @@ export function AiAgentForm({
         auto_reply_max_per_conversation: maxPerConversation,
         handoff_agent_id: handoffAgentId || null,
       };
-      if (isNew && cloneFromId) {
+      if (isCloning) {
         body.clone_from_id = cloneFromId;
+      } else if (usePlatformKey) {
+        body.use_platform_key = true;
       } else {
         body.provider = provider;
         body.model = model.trim();
@@ -322,7 +336,17 @@ export function AiAgentForm({
               </div>
             )}
 
-            {showKeyFields && (
+            {showKeyFields && platformKeyAvailable && !cloneFromId && (
+              <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t('usePlatformKey')}</p>
+                  <p className="text-xs text-muted-foreground">{t('usePlatformKeyDesc')}</p>
+                </div>
+                <Switch checked={usePlatformKey} onCheckedChange={setUsePlatformKey} />
+              </div>
+            )}
+
+            {showKeyFields && !usePlatformKey && (
               <>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">

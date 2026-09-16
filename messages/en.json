@@ -2138,7 +2138,10 @@
       "deleteAgent": "Delete agent",
       "deleteAgentConfirm": "Delete \"{name}\"? This can't be undone.",
       "deleteAgentSuccess": "Agent deleted.",
-      "deleteAgentFailed": "Failed to delete the agent."
+      "deleteAgentFailed": "Failed to delete the agent.",
+      "usePlatformKey": "Use the Jetleads default model",
+      "usePlatformKeyDesc": "No setup cost — runs on the model Jetleads maintains. Turn off to use your own API key instead.",
+      "platformKeyBadge": "Default model"
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",

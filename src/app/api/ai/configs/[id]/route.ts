@@ -7,6 +7,7 @@ import {
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
+import { getPlatformAiConfig, hasPlatformAiConfig } from '@/lib/ai/platform-key'
 import { AiError, type AiProvider } from '@/lib/ai/types'
 
 function bad(message: string) {
@@ -42,6 +43,8 @@ export async function GET(
       ...safe,
       has_key: !!api_key,
       has_embeddings_key: !!embeddings_api_key,
+      uses_platform_key: !api_key,
+      platform_key_available: hasPlatformAiConfig(),
     })
   } catch (err) {
     return toErrorResponse(err)
@@ -117,6 +120,23 @@ export async function PATCH(
       }
     }
 
+    // Switch this agent onto the platform's shared key — no validation
+    // needed, there's nothing new to check with the provider.
+    if (body.use_platform_key === true) {
+      const platform = getPlatformAiConfig()
+      if (!platform) return bad('No platform-wide AI key is configured on this deployment.')
+      patch.provider = platform.provider
+      patch.model = platform.model
+      patch.api_key = null
+      if (Object.keys(patch).length === 0) return NextResponse.json({ success: true })
+      const { error: upErr } = await supabase.from('ai_configs').update(patch).eq('id', id)
+      if (upErr) {
+        console.error('[ai/configs/[id] PATCH] update error:', upErr)
+        return NextResponse.json({ error: 'Failed to save AI agent' }, { status: 500 })
+      }
+      return NextResponse.json({ success: true })
+    }
+
     const providerChanging = typeof body.provider === 'string' && body.provider !== existing.provider
     const modelChanging = typeof body.model === 'string' && body.model.trim() !== existing.model
     const rawKey = typeof body.api_key === 'string' ? body.api_key.trim() : ''
@@ -130,12 +150,14 @@ export async function PATCH(
       let apiKeyPlain: string
       if (rawKey) {
         apiKeyPlain = rawKey
-      } else {
+      } else if (existing.api_key) {
         try {
           apiKeyPlain = decrypt(existing.api_key)
         } catch {
           return bad('Stored API key could not be decrypted — re-enter your key.')
         }
+      } else {
+        return bad('api_key is required to move this agent off the shared platform key.')
       }
       try {
         await validateAiCredentials({

@@ -7,6 +7,7 @@ import {
 import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit'
 import { encrypt } from '@/lib/whatsapp/encryption'
 import { validateAiCredentials } from '@/lib/ai/validate'
+import { getPlatformAiConfig, hasPlatformAiConfig } from '@/lib/ai/platform-key'
 import { AiError, type AiProvider } from '@/lib/ai/types'
 
 function bad(message: string) {
@@ -43,9 +44,10 @@ export async function GET() {
       ...rest,
       has_key: !!api_key,
       has_embeddings_key: !!embeddings_api_key,
+      uses_platform_key: !api_key,
     }))
 
-    return NextResponse.json({ configs })
+    return NextResponse.json({ configs, platform_key_available: hasPlatformAiConfig() })
   } catch (err) {
     return toErrorResponse(err)
   }
@@ -82,10 +84,12 @@ export async function POST(request: Request) {
 
     let provider: AiProvider
     let model: string
-    let apiKeyEncrypted: string
+    let apiKeyEncrypted: string | null
     let embeddingsKeyEncrypted: string | null = null
 
     const cloneFromId = typeof body.clone_from_id === 'string' ? body.clone_from_id : ''
+    const usePlatformKey = body.use_platform_key === true
+
     if (cloneFromId) {
       const { data: source } = await supabase
         .from('ai_configs')
@@ -96,8 +100,16 @@ export async function POST(request: Request) {
       if (!source) return bad('clone_from_id does not match an agent on this account')
       provider = source.provider as AiProvider
       model = source.model as string
-      apiKeyEncrypted = source.api_key as string
+      // Copied as-is, including null — cloning a shared-model agent
+      // produces another shared-model agent, which is correct.
+      apiKeyEncrypted = source.api_key as string | null
       embeddingsKeyEncrypted = (source.embeddings_api_key as string | null) ?? null
+    } else if (usePlatformKey) {
+      const platform = getPlatformAiConfig()
+      if (!platform) return bad('No platform-wide AI key is configured on this deployment.')
+      provider = platform.provider
+      model = platform.model
+      apiKeyEncrypted = null
     } else {
       const rawProvider = body.provider as AiProvider
       if (rawProvider !== 'openai' && rawProvider !== 'anthropic') {

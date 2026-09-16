@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { getPlatformAiConfig } from './platform-key'
 import type { AiConfig } from './types'
 
 interface AiConfigRow {
   provider: 'openai' | 'anthropic'
   model: string
-  api_key: string
+  api_key: string | null
   system_prompt: string | null
   is_active: boolean
   auto_reply_enabled: boolean
@@ -92,10 +93,22 @@ export async function loadAiConfig(
   // The Playground passes requireActive:false so an admin can test the
   // agent before flipping the master switch on.
   if (requireActive && !row.is_active) return null
-  // Defensive: the column is NOT NULL, but a partial write / manual DB
-  // edit could leave it empty. Treat a missing key as "not configured"
-  // rather than letting decrypt() throw on null.
-  if (!row.api_key) return null
+
+  // No BYOK key on this row means "use the platform's shared model" —
+  // provider/model on the row are display-only in that case, the
+  // platform's own values are what actually run.
+  let provider = row.provider
+  let model = row.model
+  let apiKey: string
+  if (row.api_key) {
+    apiKey = decrypt(row.api_key)
+  } else {
+    const platform = getPlatformAiConfig()
+    if (!platform) return null
+    provider = platform.provider
+    model = platform.model
+    apiKey = platform.apiKey
+  }
 
   // The embeddings key is optional and independent of the chat key —
   // a corrupt/undecryptable one should downgrade to lexical KB, not
@@ -115,9 +128,9 @@ export async function loadAiConfig(
   }
 
   return {
-    provider: row.provider,
-    model: row.model,
-    apiKey: decrypt(row.api_key),
+    provider,
+    model,
+    apiKey,
     systemPrompt: row.system_prompt,
     isActive: row.is_active,
     autoReplyEnabled: row.auto_reply_enabled,
