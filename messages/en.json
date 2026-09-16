@@ -160,7 +160,9 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "broadcastFilter": "Broadcast",
+      "allBroadcasts": "All broadcasts"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",

@@ -72,6 +72,14 @@ export function ConversationList({
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  // "Which broadcast did this conversation come from?" — recipients are
+  // tracked per-broadcast in broadcast_recipients, not on the
+  // conversation/contact itself, so this filter resolves to a set of
+  // contact_ids rather than a column comparison like the other filters.
+  const [broadcasts, setBroadcasts] = useState<{ id: string; name: string }[]>([]);
+  const [selectedBroadcastId, setSelectedBroadcastId] = useState<string | null>(null);
+  const [broadcastContactIds, setBroadcastContactIds] = useState<Set<string> | null>(null);
+  const [loadingBroadcastFilter, setLoadingBroadcastFilter] = useState(false);
 
   // Keep the latest callback in a ref so the fetch effect below can
   // have a stable, empty-dep identity. Previously the fetch useCallback
@@ -140,6 +148,58 @@ export function ConversationList({
     };
   }, []);
 
+  // Recent broadcasts for the filter picker — enough to cover "which
+  // dispatch did this reply come from" without listing the account's
+  // entire send history.
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("broadcasts")
+        .select("id, name")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (!cancelled && data) setBroadcasts(data as { id: string; name: string }[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Resolve the selected broadcast into the set of contacts it reached,
+  // so `filtered` below can narrow the list the same way the tag/company
+  // filters do — a plain client-side Set lookup, no per-render query.
+  // No selection → nothing to resolve; `filtered` only ever consults
+  // broadcastContactIds while selectedBroadcastId is set, and the
+  // loading spinner covers the brief window where it'd otherwise hold
+  // the previous selection's set while a new one resolves.
+  useEffect(() => {
+    if (!selectedBroadcastId) return;
+    const supabase = createClient();
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("broadcast_recipients")
+        .select("contact_id")
+        .eq("broadcast_id", selectedBroadcastId);
+      if (cancelled) return;
+      setBroadcastContactIds(new Set((data ?? []).map((r) => r.contact_id as string)));
+      setLoadingBroadcastFilter(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedBroadcastId]);
+
+  // Sets loading synchronously with the selection itself (a real
+  // event-driven update, not an effect reacting to state) — the effect
+  // above only ever clears it once the fetch resolves.
+  const selectBroadcastFilter = useCallback((id: string | null) => {
+    setSelectedBroadcastId(id);
+    setLoadingBroadcastFilter(id !== null);
+  }, []);
+
   // Company options are derived from the loaded conversations — there's no
   // separate companies table, and only companies with a live conversation
   // are worth offering as an inbox filter.
@@ -177,6 +237,12 @@ export function ConversationList({
       );
     }
 
+    if (selectedBroadcastId) {
+      // While the recipient set is still resolving, filter down to
+      // nothing rather than briefly flashing the whole unfiltered list.
+      result = broadcastContactIds ? result.filter((c) => broadcastContactIds.has(c.contact_id)) : [];
+    }
+
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter((c) => {
@@ -188,7 +254,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [conversations, filter, search, selectedTagIds, selectedCompany, selectedBroadcastId, broadcastContactIds]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -199,9 +265,12 @@ export function ConversationList({
   const clearContactFilters = useCallback(() => {
     setSelectedTagIds([]);
     setSelectedCompany(null);
-  }, []);
+    selectBroadcastFilter(null);
+  }, [selectBroadcastFilter]);
 
-  const hasContactFilters = selectedTagIds.length > 0 || selectedCompany !== null;
+  const hasContactFilters =
+    selectedTagIds.length > 0 || selectedCompany !== null || selectedBroadcastId !== null;
+  const selectedBroadcastName = broadcasts.find((b) => b.id === selectedBroadcastId)?.name ?? null;
 
   const handleSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -350,6 +419,52 @@ export function ConversationList({
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+
+          {broadcasts.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "inline-flex h-7 max-w-40 items-center justify-center gap-1 rounded-md px-2 text-xs hover:bg-muted",
+                  selectedBroadcastId
+                    ? "text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <span className="truncate">{selectedBroadcastName ?? t("broadcastFilter")}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="max-h-64 w-56 border-border bg-popover"
+              >
+                <DropdownMenuItem
+                  onClick={() => selectBroadcastFilter(null)}
+                  className={cn(
+                    "text-sm",
+                    selectedBroadcastId === null
+                      ? "text-primary"
+                      : "text-popover-foreground"
+                  )}
+                >
+                  {t("allBroadcasts")}
+                </DropdownMenuItem>
+                {broadcasts.map((b) => (
+                  <DropdownMenuItem
+                    key={b.id}
+                    onClick={() => selectBroadcastFilter(b.id)}
+                    className={cn(
+                      "text-sm",
+                      selectedBroadcastId === b.id
+                        ? "text-primary"
+                        : "text-popover-foreground"
+                    )}
+                  >
+                    <span className="truncate">{b.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {hasContactFilters && (
@@ -380,6 +495,18 @@ export function ConversationList({
                 <X className="h-3 w-3" />
               </button>
             )}
+            {selectedBroadcastId && (
+              <button
+                onClick={() => selectBroadcastFilter(null)}
+                disabled={loadingBroadcastFilter}
+                className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground hover:bg-muted/70"
+              >
+                <span className="max-w-24 truncate">
+                  {selectedBroadcastName ?? t("broadcastFilter")}
+                </span>
+                <X className="h-3 w-3" />
+              </button>
+            )}
             <button
               onClick={clearContactFilters}
               className="px-1 text-[11px] text-muted-foreground hover:text-foreground"
@@ -397,7 +524,7 @@ export function ConversationList({
           space — the list then overflows and gets clipped by the
           parent's overflow-hidden with no scrollbar (issue #229). */}
       <ScrollArea className="min-h-0 flex-1">
-        {loading ? (
+        {loading || (selectedBroadcastId !== null && loadingBroadcastFilter) ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           </div>
