@@ -1021,7 +1021,8 @@
         "errorLoadFields": "Failed to load custom fields",
         "errorCsvParse": "Could not parse CSV file.",
         "errorCsvMissingPhone": "CSV must have a 'phone' column.",
-        "estimatedCost": "Maximum estimated cost: US$ {usd} (≈ R$ {brl})"
+        "estimatedCost": "Maximum estimated cost: US$ {usd} (≈ R$ {brl})",
+        "downloadTemplate": "Download template spreadsheet"
       },
       "personalize": {
         "title": "Personalize Variables",

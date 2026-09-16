@@ -1021,7 +1021,8 @@
         "errorLoadFields": "Falha ao carregar campos personalizados",
         "errorCsvParse": "Não foi possível processar o arquivo CSV.",
         "errorCsvMissingPhone": "O CSV precisa ter uma coluna 'phone'.",
-        "estimatedCost": "Custo máximo estimado: US$ {usd} (≈ R$ {brl})"
+        "estimatedCost": "Custo máximo estimado: US$ {usd} (≈ R$ {brl})",
+        "downloadTemplate": "Baixar planilha-modelo"
       },
       "personalize": {
         "title": "Personalizar variáveis",

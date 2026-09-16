@@ -15,6 +15,7 @@ import {
   X,
   FileText,
   Layers,
+  Download,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -36,6 +37,24 @@ async function readCsvFile(file: File): Promise<string> {
     return new TextDecoder('windows-1252').decode(buffer);
   }
   return utf8;
+}
+
+// Only the two columns this wizard actually reads (phone, optional
+// name) — the fuller 5-column template belongs to the Leads import
+// modal, which also carries email/company/tags.
+const CSV_TEMPLATE_CONTENT = 'telefone,nome\n11999999999,João Silva\n';
+
+function downloadCsvTemplate() {
+  // Leading BOM so Excel (still the most common place this gets
+  // filled in) detects UTF-8 instead of mangling "João" on reopen.
+  const BOM = String.fromCharCode(0xfeff);
+  const blob = new Blob([BOM + CSV_TEMPLATE_CONTENT], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'modelo-disparo-contatos.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv' | 'lead_base';
@@ -467,6 +486,14 @@ export function Step2SelectAudience({
 
       {audience.type === 'csv' && (
         <div className="rounded-xl border border-border bg-card/50 p-4">
+          <button
+            type="button"
+            onClick={downloadCsvTemplate}
+            className="mb-3 inline-flex w-fit items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary/80"
+          >
+            <Download className="h-3.5 w-3.5" />
+            {t('selectAudience.downloadTemplate')}
+          </button>
           <input
             ref={csvFileRef}
             type="file"
