@@ -886,7 +886,23 @@
         "delivered": "Entregues",
         "read": "Lidas",
         "replied": "Respondidas"
-      }
+      },
+      "pause": "Pausar",
+      "pausing": "Pausando…",
+      "stop": "Parar",
+      "stopping": "Parando…",
+      "resume": "Continuar",
+      "resuming": "Continuando…",
+      "pending": "{count} {count, plural, =1 {pendente} other {pendentes}}",
+      "toastPaused": "Disparo pausado.",
+      "toastStopped": "Disparo interrompido.",
+      "toastPauseFailed": "Falha ao pausar o disparo.",
+      "toastStopFailed": "Falha ao parar o disparo.",
+      "toastNoPendingRecipients": "Nenhum destinatário pendente.",
+      "toastResumeSuccess": "{count} {count, plural, =1 {mensagem enviada} other {mensagens enviadas}} com sucesso.",
+      "toastResumePartial": "{sent} enviada(s), {stillPending} ainda pendente(s) — tente continuar de novo.",
+      "toastResumeFailed": "Falha ao continuar o envio.",
+      "stopConfirm": "Deseja realmente parar este disparo? Os contatos pendentes não serão enviados."
     },
     "status": {
       "draft": "Rascunho",
@@ -894,6 +910,8 @@
       "sending": "Enviando",
       "sent": "Enviado",
       "failed": "Falhou",
+      "paused": "Pausado",
+      "stopped": "Interrompido",
       "pending": "Pendente",
       "delivered": "Entregue",
       "read": "Lido",
@@ -951,7 +969,16 @@
       "toastNoPendingRecipients": "Nenhum destinatário pendente.",
       "toastResumeSuccess": "{count} {count, plural, =1 {mensagem enviada} other {mensagens enviadas}} com sucesso.",
       "toastResumePartial": "{sent} enviada(s), {stillPending} ainda pendente(s) — tente continuar de novo.",
-      "toastResumeFailed": "Falha ao continuar o envio."
+      "toastResumeFailed": "Falha ao continuar o envio.",
+      "pause": "Pausar envio",
+      "pausing": "Pausando…",
+      "stop": "Parar envio",
+      "stopping": "Parando…",
+      "toastPaused": "Disparo pausado.",
+      "toastStopped": "Disparo interrompido.",
+      "toastPauseFailed": "Falha ao pausar o disparo.",
+      "toastStopFailed": "Falha ao parar o disparo.",
+      "stopConfirm": "Deseja realmente parar este disparo? Os contatos pendentes não serão enviados."
     },
     "new": {
       "title": "Novo disparo",

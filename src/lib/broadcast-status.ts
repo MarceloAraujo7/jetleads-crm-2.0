@@ -74,12 +74,28 @@ export const recipientStatusConfig: Record<RecipientStatus, StatusDisplay> = {
   },
 };
 
+export const pausedStatusDisplay: StatusDisplay = {
+  label: "paused",
+  classes: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+};
+
+export const stoppedStatusDisplay: StatusDisplay = {
+  label: "stopped",
+  classes: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+};
+
 /**
  * Tolerant lookup — callers often have a generic string status
  * coming from Supabase. Falls back to the "draft" / "pending"
  * entry so the UI never crashes on an unknown value.
  */
-export function getBroadcastStatus(status: string): StatusDisplay {
+export function getBroadcastStatus(status: string, sentCount?: number): StatusDisplay {
+  if (status === 'draft' && (sentCount ?? 0) > 0) {
+    return pausedStatusDisplay;
+  }
+  if (status === 'failed' && (sentCount ?? 0) > 0) {
+    return stoppedStatusDisplay;
+  }
   return (
     broadcastStatusConfig[status as BroadcastStatus] ??
     broadcastStatusConfig.draft

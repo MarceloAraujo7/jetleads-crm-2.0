@@ -73,6 +73,8 @@ interface UseBroadcastSendingReturn {
    *  attempted (not failed — nothing ran for them at all). Reuses the
    *  broadcast's stored template/variables/channel, same as retry. */
   resumePendingRecipients: (broadcastId: string) => Promise<{ sent: number; stillPending: number }>;
+  pauseBroadcast: (broadcastId: string) => Promise<void>;
+  stopBroadcast: (broadcastId: string) => Promise<void>;
   isProcessing: boolean;
   progress: number;
 }
@@ -464,7 +466,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     channelId: string | null | undefined,
     headerMediaUrl: string | undefined,
     onProgress: (fraction: number) => void,
-  ): Promise<{ failedCount: number }> {
+    broadcastId?: string,
+  ): Promise<{ failedCount: number; aborted?: boolean }> {
     let failedCount = 0;
     const totalRecipients = recipients.length;
 
@@ -488,6 +491,17 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
 
     for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
+      if (broadcastId) {
+        const { data: bRow } = await supabase
+          .from('broadcasts')
+          .select('status')
+          .eq('id', broadcastId)
+          .maybeSingle();
+        if (bRow && bRow.status !== 'sending') {
+          return { failedCount, aborted: true };
+        }
+      }
+
       const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
 
       const paramsByRecipientId = new Map<string, string[]>();
@@ -603,7 +617,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       }
     }
 
-    return { failedCount };
+    return { failedCount, aborted: false };
   }
 
   async function retryFailedRecipients(
@@ -653,6 +667,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         broadcast.channel_id,
         (broadcast.header_media_url as string | null | undefined) ?? undefined,
         (fraction) => setProgress(10 + Math.round(fraction * 85)),
+        broadcastId,
       );
 
       // Only flip back to 'sent' when at least one retry actually went
@@ -695,6 +710,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('Template not found — it may have been deleted or renamed since this broadcast was sent.');
       }
 
+      // Mark status as 'sending'
+      await supabase.from('broadcasts').update({ status: 'sending' }).eq('id', broadcastId);
+
       setProgress(10);
       const { data: pendingRows, error: rErr } = await supabase
         .from('broadcast_recipients')
@@ -708,7 +726,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         return { sent: 0, stillPending: 0 };
       }
 
-      const { failedCount } = await sendRecipientBatches(
+      const { failedCount, aborted } = await sendRecipientBatches(
         supabase,
         recipients,
         templateRow as unknown as MessageTemplate,
@@ -716,18 +734,17 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         broadcast.channel_id,
         (broadcast.header_media_url as string | null | undefined) ?? undefined,
         (fraction) => setProgress(10 + Math.round(fraction * 85)),
+        broadcastId,
       );
 
-      // Re-check for any recipients still pending (e.g. this resume
-      // attempt itself got interrupted) before deciding the broadcast
-      // is actually done — only then does 'sending' stop being accurate.
+      // Re-check for any recipients still pending
       const { count: stillPendingCount } = await supabase
         .from('broadcast_recipients')
         .select('id', { count: 'exact', head: true })
         .eq('broadcast_id', broadcastId)
         .eq('status', 'pending');
 
-      if (!stillPendingCount) {
+      if (!aborted && !stillPendingCount) {
         await supabase.from('broadcasts').update({ status: 'sent' }).eq('id', broadcastId);
       }
 
@@ -736,6 +753,30 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     } finally {
       setIsProcessing(false);
     }
+  }
+
+  async function pauseBroadcast(broadcastId: string): Promise<void> {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('broadcasts')
+      .update({ status: 'draft' })
+      .eq('id', broadcastId);
+    if (error) throw new Error(error.message);
+  }
+
+  async function stopBroadcast(broadcastId: string): Promise<void> {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('broadcasts')
+      .update({ status: 'failed' })
+      .eq('id', broadcastId);
+    if (error) throw new Error(error.message);
+
+    await supabase
+      .from('broadcast_recipients')
+      .update({ status: 'failed', error_message: 'Cancelado pelo usuário' })
+      .eq('broadcast_id', broadcastId)
+      .eq('status', 'pending');
   }
 
   async function createAndSendBroadcast(payload: BroadcastPayload): Promise<string> {
@@ -851,7 +892,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       }
 
       const totalRecipients = recipients.length;
-      const { failedCount } = await sendRecipientBatches(
+      const { failedCount, aborted } = await sendRecipientBatches(
         supabase,
         recipients,
         payload.template,
@@ -859,17 +900,20 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         payload.channelId,
         payload.headerMediaUrl?.trim(),
         (fraction) => setProgress(30 + Math.round(fraction * 60)),
+        broadcast.id,
       );
 
       // ── Step 5: Finalize status ───────────────────────────────────
       // Aggregate counts are maintained by the DB trigger (migration
-      // 003); we only flip the final status here.
-      setProgress(95);
-      const finalStatus = failedCount === totalRecipients ? 'failed' : 'sent';
-      await supabase
-        .from('broadcasts')
-        .update({ status: finalStatus })
-        .eq('id', broadcast.id);
+      // 003); we only flip the final status here if not paused/stopped.
+      if (!aborted) {
+        setProgress(95);
+        const finalStatus = failedCount === totalRecipients ? 'failed' : 'sent';
+        await supabase
+          .from('broadcasts')
+          .update({ status: finalStatus })
+          .eq('id', broadcast.id);
+      }
 
       setProgress(100);
       return broadcast.id;
@@ -882,6 +926,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     createAndSendBroadcast,
     retryFailedRecipients,
     resumePendingRecipients,
+    pauseBroadcast,
+    stopBroadcast,
     isProcessing,
     progress,
   };

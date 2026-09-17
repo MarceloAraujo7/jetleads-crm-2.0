@@ -6,10 +6,12 @@ import { createClient } from '@/lib/supabase/client';
 import { Broadcast } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Radio, Plus, Loader2, Users, CheckCheck, Eye, MessageCircle } from 'lucide-react';
+import { Radio, Plus, Loader2, Users, CheckCheck, Eye, MessageCircle, Play, Pause, Square } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
+import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
+import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
 interface ChannelOption {
@@ -68,9 +70,60 @@ export default function BroadcastsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [channels, setChannels] = useState<ChannelOption[]>([]);
+  const { resumePendingRecipients, pauseBroadcast, stopBroadcast } = useBroadcastSending();
+  const [activeAction, setActiveAction] = useState<{
+    id: string;
+    type: 'resuming' | 'pausing' | 'stopping';
+  } | null>(null);
 
   // Used to kick off polling only while something is actively sending.
   const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  async function handleResume(broadcastId: string) {
+    setActiveAction({ id: broadcastId, type: 'resuming' });
+    try {
+      const { sent, stillPending } = await resumePendingRecipients(broadcastId);
+      if (sent === 0 && stillPending === 0) {
+        toast.info(t('toastNoPendingRecipients'));
+      } else if (stillPending === 0) {
+        toast.success(t('toastResumeSuccess', { count: sent }));
+      } else {
+        toast.warning(t('toastResumePartial', { sent, stillPending }));
+      }
+      await fetchBroadcasts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastResumeFailed'));
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handlePause(broadcastId: string) {
+    setActiveAction({ id: broadcastId, type: 'pausing' });
+    try {
+      await pauseBroadcast(broadcastId);
+      toast.info(t('toastPaused'));
+      await fetchBroadcasts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastPauseFailed'));
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handleStop(broadcastId: string) {
+    if (!window.confirm(t('stopConfirm'))) return;
+    setActiveAction({ id: broadcastId, type: 'stopping' });
+    try {
+      await stopBroadcast(broadcastId);
+      toast.info(t('toastStopped'));
+      await fetchBroadcasts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastStopFailed'));
+    } finally {
+      setActiveAction(null);
+    }
+  }
 
   async function fetchBroadcasts() {
     try {
@@ -281,7 +334,16 @@ export default function BroadcastsPage() {
           </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {broadcasts.map((broadcast) => {
-            const status = getBroadcastStatus(broadcast.status);
+            const status = getBroadcastStatus(broadcast.status, broadcast.sent_count);
+            const pendingCount = Math.max(
+              0,
+              broadcast.total_recipients - broadcast.sent_count - broadcast.failed_count,
+            );
+            const isCardBusy = activeAction?.id === broadcast.id;
+            const showActions =
+              broadcast.status === 'sending' ||
+              (pendingCount > 0 && broadcast.status !== 'sent');
+
             return (
               <Card
                 key={broadcast.id}
@@ -318,10 +380,17 @@ export default function BroadcastsPage() {
                   </span>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
-                    <Users className="size-3.5 text-muted-foreground" />
-                    {t('table.recipients')}: {broadcast.total_recipients}
-                  </span>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="inline-flex items-center gap-1.5 text-foreground">
+                      <Users className="size-3.5 text-muted-foreground" />
+                      {t('table.recipients')}: {broadcast.total_recipients}
+                    </span>
+                    {pendingCount > 0 && broadcast.status !== 'sent' && (
+                      <span className="text-xs font-medium text-amber-500">
+                        {t('pending', { count: pendingCount })}
+                      </span>
+                    )}
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <CheckCheck className="size-3.5 shrink-0" />
@@ -336,6 +405,70 @@ export default function BroadcastsPage() {
                       {percent(broadcast.replied_count, broadcast.total_recipients)}%
                     </div>
                   </div>
+
+                  {showActions && (
+                    <div
+                      className="mt-3 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/50 pt-2.5"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {pendingCount > 0 && (
+                        <Button
+                          size="sm"
+                          disabled={isCardBusy}
+                          onClick={() => handleResume(broadcast.id)}
+                          className="h-7 px-2.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                        >
+                          {isCardBusy && activeAction?.type === 'resuming' ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Play className="mr-1 h-3 w-3" />
+                          )}
+                          {isCardBusy && activeAction?.type === 'resuming'
+                            ? t('resuming')
+                            : t('resume')}
+                        </Button>
+                      )}
+
+                      {broadcast.status === 'sending' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isCardBusy}
+                          onClick={() => handlePause(broadcast.id)}
+                          className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 h-7 px-2.5 text-xs"
+                        >
+                          {isCardBusy && activeAction?.type === 'pausing' ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Pause className="mr-1 h-3 w-3" />
+                          )}
+                          {isCardBusy && activeAction?.type === 'pausing'
+                            ? t('pausing')
+                            : t('pause')}
+                        </Button>
+                      )}
+
+                      {(broadcast.status === 'sending' ||
+                        (pendingCount > 0 && broadcast.status !== 'failed')) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={isCardBusy}
+                          onClick={() => handleStop(broadcast.id)}
+                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-7 px-2.5 text-xs"
+                        >
+                          {isCardBusy && activeAction?.type === 'stopping' ? (
+                            <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                          ) : (
+                            <Square className="mr-1 h-3 w-3" />
+                          )}
+                          {isCardBusy && activeAction?.type === 'stopping'
+                            ? t('stopping')
+                            : t('stop')}
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );

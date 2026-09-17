@@ -886,7 +886,23 @@
         "delivered": "Delivered",
         "read": "Read",
         "replied": "Replied"
-      }
+      },
+      "pause": "Pause",
+      "pausing": "Pausing…",
+      "stop": "Stop",
+      "stopping": "Stopping…",
+      "resume": "Continue",
+      "resuming": "Continuing…",
+      "pending": "{count} {count, plural, =1 {pending} other {pending}}",
+      "toastPaused": "Broadcast paused.",
+      "toastStopped": "Broadcast stopped.",
+      "toastPauseFailed": "Failed to pause broadcast.",
+      "toastStopFailed": "Failed to stop broadcast.",
+      "toastNoPendingRecipients": "No pending recipients.",
+      "toastResumeSuccess": "{count} {count, plural, =1 {message} other {messages}} sent successfully.",
+      "toastResumePartial": "{sent} sent, {stillPending} still pending — try continuing again.",
+      "toastResumeFailed": "Failed to continue sending.",
+      "stopConfirm": "Are you sure you want to stop this broadcast? Pending recipients will not be sent."
     },
     "status": {
       "draft": "Draft",
@@ -894,6 +910,8 @@
       "sending": "Sending",
       "sent": "Sent",
       "failed": "Failed",
+      "paused": "Paused",
+      "stopped": "Stopped",
       "pending": "Pending",
       "delivered": "Delivered",
       "read": "Read",
@@ -951,7 +969,16 @@
       "toastNoPendingRecipients": "No pending recipients.",
       "toastResumeSuccess": "{count} {count, plural, =1 {message} other {messages}} sent successfully.",
       "toastResumePartial": "{sent} sent, {stillPending} still pending — try continuing again.",
-      "toastResumeFailed": "Failed to continue sending."
+      "toastResumeFailed": "Failed to continue sending.",
+      "pause": "Pause sending",
+      "pausing": "Pausing…",
+      "stop": "Stop sending",
+      "stopping": "Stopping…",
+      "toastPaused": "Broadcast paused.",
+      "toastStopped": "Broadcast stopped.",
+      "toastPauseFailed": "Failed to pause broadcast.",
+      "toastStopFailed": "Failed to stop broadcast.",
+      "stopConfirm": "Are you sure you want to stop this broadcast? Pending recipients will not be sent."
     },
     "new": {
       "title": "New Broadcast",

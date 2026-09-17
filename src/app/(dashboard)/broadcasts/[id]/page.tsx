@@ -34,6 +34,9 @@ import {
   ChevronDown,
   Trash2,
   RefreshCw,
+  Play,
+  Pause,
+  Square,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -170,7 +173,14 @@ export default function BroadcastDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [resuming, setResuming] = useState(false);
-  const { retryFailedRecipients, resumePendingRecipients } = useBroadcastSending();
+  const [pausing, setPausing] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const {
+    retryFailedRecipients,
+    resumePendingRecipients,
+    pauseBroadcast,
+    stopBroadcast,
+  } = useBroadcastSending();
 
   const fetchData = useCallback(async () => {
     try {
@@ -242,10 +252,39 @@ export default function BroadcastDetailPage() {
     }
   }
 
-  const pendingCount = useMemo(
-    () => recipients.filter((r) => r.status === 'pending').length,
-    [recipients],
-  );
+  async function handlePause() {
+    setPausing(true);
+    try {
+      await pauseBroadcast(broadcastId);
+      toast.info(t('toastPaused'));
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastPauseFailed'));
+    } finally {
+      setPausing(false);
+    }
+  }
+
+  async function handleStop() {
+    if (!window.confirm(t('stopConfirm'))) return;
+    setStopping(true);
+    try {
+      await stopBroadcast(broadcastId);
+      toast.info(t('toastStopped'));
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastStopFailed'));
+    } finally {
+      setStopping(false);
+    }
+  }
+
+  const pendingCount = useMemo(() => {
+    if (!broadcast) return 0;
+    const remaining = Math.max(0, broadcast.total_recipients - broadcast.sent_count - broadcast.failed_count);
+    const fromRecs = recipients.filter((r) => r.status === 'pending').length;
+    return Math.max(remaining, fromRecs);
+  }, [broadcast, recipients]);
 
   const filteredRecipients = useMemo(
     () =>
@@ -319,7 +358,7 @@ export default function BroadcastDetailPage() {
     );
   }
 
-  const status = getBroadcastStatus(broadcast.status);
+  const status = getBroadcastStatus(broadcast.status, broadcast.sent_count);
 
   const funnelSteps: FunnelStep[] = [
     { label: t('stats.sent'), value: broadcast.sent_count, color: 'bg-primary' },
@@ -360,48 +399,88 @@ export default function BroadcastDetailPage() {
           </div>
         </div>
 
-        {/* Delete — inline-confirm pattern matches the pipeline-settings
-            "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
-            because orphaning in-flight Meta messages would leave the
-            funnel inconsistent. */}
-        {confirmDelete ? (
-          <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm">
-            <span className="text-red-300">{t('deletePrompt')}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {pendingCount > 0 && (
+            <Button
+              size="sm"
+              onClick={handleResumePending}
+              disabled={resuming}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {resuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {resuming ? t('resuming') : t('resumePending')}
+            </Button>
+          )}
+
+          {broadcast.status === 'sending' && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setConfirmDelete(false)}
-              disabled={deleting}
-              className="h-7 border-border bg-transparent text-muted-foreground hover:bg-muted"
+              onClick={handlePause}
+              disabled={pausing}
+              className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
             >
-              {t('cancel')}
+              {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+              {pausing ? t('pausing') : t('pause')}
             </Button>
+          )}
+
+          {(broadcast.status === 'sending' || (pendingCount > 0 && broadcast.status !== 'failed')) && (
             <Button
+              variant="outline"
               size="sm"
-              onClick={handleDelete}
-              disabled={deleting}
-              className="h-7 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              onClick={handleStop}
+              disabled={stopping}
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
             >
-              {deleting ? t('deleting') : t('confirm')}
+              {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+              {stopping ? t('stopping') : t('stop')}
             </Button>
-          </div>
-        ) : (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={broadcast.status === 'sending'}
-            onClick={() => setConfirmDelete(true)}
-            title={
-              broadcast.status === 'sending'
-                ? t('cannotDeleteSending')
-                : t('deleteHover')
-            }
-            className="border-red-500/30 bg-transparent text-red-400 hover:bg-red-500/10 disabled:opacity-40"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            {t('delete')}
-          </Button>
-        )}
+          )}
+
+          {/* Delete — inline-confirm pattern matches the pipeline-settings
+              "Delete Pipeline" flow. Mid-send broadcasts can't be deleted
+              because orphaning in-flight Meta messages would leave the
+              funnel inconsistent. */}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-sm">
+              <span className="text-red-300">{t('deletePrompt')}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmDelete(false)}
+                disabled={deleting}
+                className="h-7 border-border bg-transparent text-muted-foreground hover:bg-muted"
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="h-7 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? t('deleting') : t('confirm')}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={broadcast.status === 'sending'}
+              onClick={() => setConfirmDelete(true)}
+              title={
+                broadcast.status === 'sending'
+                  ? t('cannotDeleteSending')
+                  : t('deleteHover')
+              }
+              className="border-red-500/30 bg-transparent text-red-400 hover:bg-red-500/10 disabled:opacity-40"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {t('delete')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Stats — 6 cards: Total / Sent / Delivered / Read / Replied / Failed.
@@ -465,23 +544,49 @@ export default function BroadcastDetailPage() {
       </div>
 
       {pendingCount > 0 && (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
           <p className="text-sm text-amber-300">
             {t('resumePendingHint', { count: pendingCount })}
           </p>
-          <Button
-            size="sm"
-            onClick={handleResumePending}
-            disabled={resuming}
-            className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            {resuming ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <RefreshCw className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={handleResumePending}
+              disabled={resuming}
+              className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {resuming ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              {resuming ? t('resuming') : t('resumePending')}
+            </Button>
+            {broadcast.status === 'sending' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePause}
+                disabled={pausing}
+                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              >
+                {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                {pausing ? t('pausing') : t('pause')}
+              </Button>
             )}
-            {resuming ? t('resuming') : t('resumePending')}
-          </Button>
+            {broadcast.status !== 'failed' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStop}
+                disabled={stopping}
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+              >
+                {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                {stopping ? t('stopping') : t('stop')}
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
