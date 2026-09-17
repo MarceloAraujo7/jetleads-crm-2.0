@@ -131,6 +131,28 @@ function formatDuration(seconds: number): string {
  *  Meta-accepted format means no server ffmpeg / transcode step. */
 const OPUS_ENCODER_PATH = "/opus/encoderWorker.min.js";
 
+const DRAFT_STORAGE_PREFIX = "wacrm:draft:";
+
+function getSavedDraft(convId: string): string {
+  if (typeof window === "undefined" || !convId) return "";
+  try {
+    return sessionStorage.getItem(`${DRAFT_STORAGE_PREFIX}${convId}`) || "";
+  } catch {
+    return "";
+  }
+}
+
+function saveDraft(convId: string, text: string) {
+  if (typeof window === "undefined" || !convId) return;
+  try {
+    if (!text.trim()) {
+      sessionStorage.removeItem(`${DRAFT_STORAGE_PREFIX}${convId}`);
+    } else {
+      sessionStorage.setItem(`${DRAFT_STORAGE_PREFIX}${convId}`, text);
+    }
+  } catch {}
+}
+
 export function MessageComposer({
   conversationId,
   sessionExpired,
@@ -143,7 +165,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const t = useTranslations("Inbox.composer");
 
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => getSavedDraft(conversationId));
   const [sending, setSending] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -220,6 +242,14 @@ export function MessageComposer({
     el.style.height = `${Math.min(el.scrollHeight, 96)}px`;
   }, []);
 
+  // Restore draft and readjust textarea height on conversationId changes
+  useEffect(() => {
+    setText(getSavedDraft(conversationId));
+    requestAnimationFrame(() => {
+      adjustHeight();
+    });
+  }, [conversationId, adjustHeight]);
+
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
     if (!trimmed || sending || sessionExpired) return;
@@ -227,6 +257,7 @@ export function MessageComposer({
     setSending(true);
     try {
       onSend(trimmed, replyTo?.id);
+      saveDraft(conversationId, "");
       setText("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -234,7 +265,7 @@ export function MessageComposer({
     } finally {
       setSending(false);
     }
-  }, [text, sending, sessionExpired, onSend, replyTo?.id]);
+  }, [text, sending, sessionExpired, onSend, replyTo?.id, conversationId]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -248,10 +279,12 @@ export function MessageComposer({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setText(e.target.value);
+      const val = e.target.value;
+      setText(val);
+      saveDraft(conversationId, val);
       adjustHeight();
     },
-    [adjustHeight]
+    [conversationId, adjustHeight]
   );
 
   // Ask the AI assistant for a suggested reply and drop it into the
@@ -281,6 +314,7 @@ export function MessageComposer({
         return;
       }
       setText(draftText);
+      saveDraft(conversationId, draftText);
       // Let the textarea grow to fit and drop the cursor at the end so
       // the agent can tweak immediately.
       requestAnimationFrame(() => {
@@ -366,9 +400,11 @@ export function MessageComposer({
       const body = qr.content_text ?? "";
       // Separate the snippet from any existing draft with a newline so the
       // words don't run together ("Thanks" + "we'll…" → "Thankswe'll…").
-      setText((prev) =>
-        prev && !/\s$/.test(prev) ? `${prev}\n${body}` : `${prev}${body}`,
-      );
+      setText((prev) => {
+        const next = prev && !/\s$/.test(prev) ? `${prev}\n${body}` : `${prev}${body}`;
+        saveDraft(conversationId, next);
+        return next;
+      });
       requestAnimationFrame(() => {
         adjustHeight();
         const el = textareaRef.current;
@@ -378,7 +414,7 @@ export function MessageComposer({
         }
       });
     },
-    [openInteractiveBuilder, adjustHeight],
+    [openInteractiveBuilder, adjustHeight, conversationId],
   );
 
   // Upload a captured file to chat-media and stage it as a draft.

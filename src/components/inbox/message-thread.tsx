@@ -1149,8 +1149,9 @@ export function MessageThread({
         }}
       />
 
-      {/* Composer */}
+      {/* Composer — keyed by conversation.id so switching leads mounts an isolated draft state */}
       <MessageComposer
+        key={conversation.id}
         conversationId={conversation.id}
         sessionExpired={sessionInfo.expired}
         onSend={handleSend}
