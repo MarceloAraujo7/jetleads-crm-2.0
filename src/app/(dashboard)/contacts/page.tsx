@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -56,6 +56,7 @@ import {
   FolderInput,
   ListChecks,
   ArrowLeft,
+  Calendar,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
@@ -72,6 +73,64 @@ const PAGE_SIZE = 25;
 
 interface ContactWithTags extends Contact {
   tags?: Tag[];
+}
+
+type DatePreset = 'today' | 'yesterday' | 'last7' | 'last30' | 'thisMonth' | 'lastMonth' | 'custom';
+
+interface DateFilterState {
+  preset: DatePreset | null;
+  from: string; // 'YYYY-MM-DD'
+  to: string;   // 'YYYY-MM-DD'
+}
+
+type CustomFieldOperator = 'contains' | 'is' | 'is_not';
+
+interface CustomFieldFilterState {
+  fieldId: string;
+  operator: CustomFieldOperator;
+  value: string;
+}
+
+function formatDateIsoDate(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getDatePresetRange(preset: DatePreset): { from: string; to: string } {
+  const now = new Date();
+  const todayStr = formatDateIsoDate(now);
+
+  if (preset === 'today') {
+    return { from: todayStr, to: todayStr };
+  }
+  if (preset === 'yesterday') {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yStr = formatDateIsoDate(y);
+    return { from: yStr, to: yStr };
+  }
+  if (preset === 'last7') {
+    const d = new Date();
+    d.setDate(d.getDate() - 6);
+    return { from: formatDateIsoDate(d), to: todayStr };
+  }
+  if (preset === 'last30') {
+    const d = new Date();
+    d.setDate(d.getDate() - 29);
+    return { from: formatDateIsoDate(d), to: todayStr };
+  }
+  if (preset === 'thisMonth') {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: formatDateIsoDate(first), to: todayStr };
+  }
+  if (preset === 'lastMonth') {
+    const first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const last = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: formatDateIsoDate(first), to: formatDateIsoDate(last) };
+  }
+  return { from: '', to: '' };
 }
 
 // `useSearchParams` opts this page out of static prerendering unless it
@@ -107,6 +166,80 @@ function ContactsPageInner() {
   // with no base assigned, otherwise a real lead_bases.id.
   const [leadBases, setLeadBases] = useState<{ id: string; name: string }[]>([]);
   const [selectedBaseId, setSelectedBaseId] = useState<string>('');
+
+  // Date of import / creation filter
+  const [dateFilter, setDateFilter] = useState<DateFilterState>({
+    preset: null,
+    from: '',
+    to: '',
+  });
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const [tempDateFrom, setTempDateFrom] = useState('');
+  const [tempDateTo, setTempDateTo] = useState('');
+
+  // Custom field filter
+  const [customFields, setCustomFields] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [customFieldFilter, setCustomFieldFilter] = useState<CustomFieldFilterState>({
+    fieldId: '',
+    operator: 'contains',
+    value: '',
+  });
+  const [customFieldPopoverOpen, setCustomFieldPopoverOpen] = useState(false);
+  const [tempFieldId, setTempFieldId] = useState('');
+  const [tempOperator, setTempOperator] = useState<CustomFieldOperator>('contains');
+  const [tempFieldValue, setTempFieldValue] = useState('');
+
+  const hasDateFilter = Boolean(dateFilter.from || dateFilter.to);
+  const hasCustomFieldFilter = Boolean(customFieldFilter.fieldId && customFieldFilter.value.trim());
+
+  const selectedCustomFieldName = useMemo(() => {
+    return customFields.find((f) => f.id === customFieldFilter.fieldId)?.name ?? '';
+  }, [customFields, customFieldFilter.fieldId]);
+
+  function clearDateFilter() {
+    setDateFilter({ preset: null, from: '', to: '' });
+    setTempDateFrom('');
+    setTempDateTo('');
+    setPage(0);
+  }
+
+  function applyDatePreset(preset: DatePreset) {
+    const range = getDatePresetRange(preset);
+    setDateFilter({ preset, from: range.from, to: range.to });
+    setTempDateFrom(range.from);
+    setTempDateTo(range.to);
+    setPage(0);
+    setDatePopoverOpen(false);
+  }
+
+  function applyCustomDate(from: string, to: string) {
+    setDateFilter({ preset: 'custom', from, to });
+    setPage(0);
+    setDatePopoverOpen(false);
+  }
+
+  function clearCustomFieldFilter() {
+    setCustomFieldFilter({ fieldId: '', operator: 'contains', value: '' });
+    setTempFieldId('');
+    setTempOperator('contains');
+    setTempFieldValue('');
+    setPage(0);
+  }
+
+  function applyCustomFieldFilter(fieldId: string, operator: CustomFieldOperator, value: string) {
+    setCustomFieldFilter({ fieldId, operator, value });
+    setPage(0);
+    setCustomFieldPopoverOpen(false);
+  }
+
+  function clearAllActiveFilters() {
+    setSelectedTagIds([]);
+    setSelectedBaseId('');
+    clearDateFilter();
+    clearCustomFieldFilter();
+    setSearch('');
+    setPage(0);
+  }
 
   // Landing view: a card gallery of lead bases (default) vs. the flat
   // contacts table for a chosen base/"__none__"/all. `galleryRefreshKey`
@@ -171,6 +304,11 @@ function ContactsPageInner() {
     setLeadBases(data ?? []);
   }, [supabase]);
 
+  const fetchCustomFields = useCallback(async () => {
+    const { data } = await supabase.from('custom_fields').select('id, name, type').order('name');
+    setCustomFields(data ?? []);
+  }, [supabase]);
+
   const fetchContacts = useCallback(async () => {
     const seq = ++fetchSeq.current;
     setLoading(true);
@@ -187,7 +325,10 @@ function ContactsPageInner() {
     let contactRows: Contact[];
     let count: number;
 
-    if (selectedTagIds.length > 0) {
+    const hasDate = Boolean(dateFilter.from || dateFilter.to);
+    const hasCustomField = Boolean(customFieldFilter.fieldId && customFieldFilter.value.trim());
+
+    if (selectedTagIds.length > 0 && !hasDate && !hasCustomField && !selectedBaseId) {
       // Tag filter active — resolve it server-side (join + distinct +
       // windowed total count + pagination) so a tag covering many
       // contacts can't silently truncate the result or overflow an IN
@@ -208,9 +349,17 @@ function ContactsPageInner() {
       contactRows = rows.map((r) => r.contact);
       count = rows.length > 0 ? Number(rows[0].total_count) : 0;
     } else {
+      let selectClause = '*';
+      if (hasCustomField && (customFieldFilter.operator === 'is' || customFieldFilter.operator === 'contains')) {
+        selectClause = '*, contact_custom_values!inner(custom_field_id, value)';
+      }
+      if (selectedTagIds.length > 0) {
+        selectClause += ', contact_tags!inner(tag_id)';
+      }
+
       let query = supabase
         .from('contacts')
-        .select('*', { count: 'exact' })
+        .select(selectClause, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);
 
@@ -224,6 +373,42 @@ function ContactsPageInner() {
         query = query.eq('lead_base_id', selectedBaseId);
       }
 
+      // Filter by import date (created_at)
+      if (dateFilter.from) {
+        query = query.gte('created_at', new Date(`${dateFilter.from}T00:00:00`).toISOString());
+      }
+      if (dateFilter.to) {
+        query = query.lte('created_at', new Date(`${dateFilter.to}T23:59:59.999`).toISOString());
+      }
+
+      // Filter by tags
+      if (selectedTagIds.length > 0) {
+        query = query.in('contact_tags.tag_id', selectedTagIds);
+      }
+
+      // Filter by custom field
+      if (hasCustomField) {
+        if (customFieldFilter.operator === 'is') {
+          query = query
+            .eq('contact_custom_values.custom_field_id', customFieldFilter.fieldId)
+            .eq('contact_custom_values.value', customFieldFilter.value.trim());
+        } else if (customFieldFilter.operator === 'contains') {
+          query = query
+            .eq('contact_custom_values.custom_field_id', customFieldFilter.fieldId)
+            .ilike('contact_custom_values.value', `%${customFieldFilter.value.trim()}%`);
+        } else if (customFieldFilter.operator === 'is_not') {
+          const { data: excludedRows } = await supabase
+            .from('contact_custom_values')
+            .select('contact_id')
+            .eq('custom_field_id', customFieldFilter.fieldId)
+            .eq('value', customFieldFilter.value.trim());
+          const excludedIds = (excludedRows ?? []).map((r) => r.contact_id);
+          if (excludedIds.length > 0) {
+            query = query.not('id', 'in', `(${excludedIds.join(',')})`);
+          }
+        }
+      }
+
       const { data, count: exactCount, error } = await query;
       if (seq !== fetchSeq.current) return; // superseded by a newer fetch
       if (error) {
@@ -231,7 +416,7 @@ function ContactsPageInner() {
         setLoading(false);
         return;
       }
-      contactRows = data ?? [];
+      contactRows = (data as unknown as Contact[]) ?? [];
       count = exactCount ?? 0;
     }
 
@@ -266,7 +451,7 @@ function ContactsPageInner() {
 
     setContacts(enriched);
     setLoading(false);
-  }, [supabase, page, search, selectedTagIds, selectedBaseId, tagsMap, t]);
+  }, [supabase, page, search, selectedTagIds, selectedBaseId, dateFilter, customFieldFilter, tagsMap, t]);
 
   // Load-once-on-mount-ish data fetches. Each setter inside runs
   // inside an async promise completion (Supabase await), not
@@ -279,6 +464,10 @@ function ContactsPageInner() {
   useEffect(() => {
     fetchLeadBases();
   }, [fetchLeadBases]);
+
+  useEffect(() => {
+    fetchCustomFields();
+  }, [fetchCustomFields]);
 
   useEffect(() => {
     // Skip the (paginated) contacts fetch while the gallery is showing —
@@ -409,7 +598,10 @@ function ContactsPageInner() {
       const term = search.trim();
       let ids: string[] = [];
 
-      if (selectedTagIds.length > 0) {
+      const hasDate = Boolean(dateFilter.from || dateFilter.to);
+      const hasCustomField = Boolean(customFieldFilter.fieldId && customFieldFilter.value.trim());
+
+      if (selectedTagIds.length > 0 && !hasDate && !hasCustomField && !selectedBaseId) {
         // Tag filter is resolved via the RPC (see fetchContacts) — ask
         // for every row in one shot now that we know the true count.
         const { data, error } = await supabase.rpc('filter_contacts_by_tags', {
@@ -422,10 +614,28 @@ function ContactsPageInner() {
         ids = ((data ?? []) as { contact: Contact }[]).map((r) => r.contact.id);
       } else {
         const PAGE = 1000;
+        let selectClause = 'id';
+        if (hasCustomField && (customFieldFilter.operator === 'is' || customFieldFilter.operator === 'contains')) {
+          selectClause = 'id, contact_custom_values!inner(custom_field_id, value)';
+        }
+        if (selectedTagIds.length > 0) {
+          selectClause += ', contact_tags!inner(tag_id)';
+        }
+
+        let excludedIds: string[] = [];
+        if (hasCustomField && customFieldFilter.operator === 'is_not') {
+          const { data: excludedRows } = await supabase
+            .from('contact_custom_values')
+            .select('contact_id')
+            .eq('custom_field_id', customFieldFilter.fieldId)
+            .eq('value', customFieldFilter.value.trim());
+          excludedIds = (excludedRows ?? []).map((r) => r.contact_id);
+        }
+
         for (let from = 0; from < totalCount; from += PAGE) {
           let query = supabase
             .from('contacts')
-            .select('id')
+            .select(selectClause)
             .range(from, from + PAGE - 1);
           if (term) {
             const like = `%${term}%`;
@@ -436,9 +646,31 @@ function ContactsPageInner() {
           } else if (selectedBaseId) {
             query = query.eq('lead_base_id', selectedBaseId);
           }
+          if (dateFilter.from) {
+            query = query.gte('created_at', new Date(`${dateFilter.from}T00:00:00`).toISOString());
+          }
+          if (dateFilter.to) {
+            query = query.lte('created_at', new Date(`${dateFilter.to}T23:59:59.999`).toISOString());
+          }
+          if (selectedTagIds.length > 0) {
+            query = query.in('contact_tags.tag_id', selectedTagIds);
+          }
+          if (hasCustomField) {
+            if (customFieldFilter.operator === 'is') {
+              query = query
+                .eq('contact_custom_values.custom_field_id', customFieldFilter.fieldId)
+                .eq('contact_custom_values.value', customFieldFilter.value.trim());
+            } else if (customFieldFilter.operator === 'contains') {
+              query = query
+                .eq('contact_custom_values.custom_field_id', customFieldFilter.fieldId)
+                .ilike('contact_custom_values.value', `%${customFieldFilter.value.trim()}%`);
+            } else if (customFieldFilter.operator === 'is_not' && excludedIds.length > 0) {
+              query = query.not('id', 'in', `(${excludedIds.join(',')})`);
+            }
+          }
           const { data, error } = await query;
           if (error) throw error;
-          ids.push(...(data ?? []).map((r) => r.id as string));
+          ids.push(...((data as unknown as { id: string }[]) ?? []).map((r) => r.id));
         }
       }
 
@@ -799,6 +1031,245 @@ function ContactsPageInner() {
             </PopoverContent>
           </Popover>
 
+          {/* Date of import filter */}
+          <Popover
+            open={datePopoverOpen}
+            onOpenChange={(open) => {
+              setDatePopoverOpen(open);
+              if (open) {
+                setTempDateFrom(dateFilter.from);
+                setTempDateTo(dateFilter.to);
+              }
+            }}
+          >
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="outline"
+                  className={`border-border text-muted-foreground hover:bg-muted shrink-0 ${
+                    hasDateFilter ? 'border-primary/50 text-primary bg-primary/10' : ''
+                  }`}
+                />
+              }
+            >
+              <Calendar className="size-4" />
+              {dateFilter.preset && dateFilter.preset !== 'custom'
+                ? t(`presets.${dateFilter.preset}`)
+                : hasDateFilter
+                  ? `${dateFilter.from || '…'} ~ ${dateFilter.to || '…'}`
+                  : t('filterByDate')}
+              {hasDateFilter && (
+                <span className="ml-1 inline-flex items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  1
+                </span>
+              )}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 p-3">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
+                <span className="text-sm font-medium text-popover-foreground">
+                  {t('filterByDate')}
+                </span>
+                {hasDateFilter && (
+                  <button
+                    onClick={clearDateFilter}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    {t('clear')}
+                  </button>
+                )}
+              </div>
+
+              {/* Presets */}
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
+                {(['today', 'yesterday', 'last7', 'last30', 'thisMonth', 'lastMonth'] as DatePreset[]).map((p) => (
+                  <Button
+                    key={p}
+                    variant="outline"
+                    size="sm"
+                    className={`h-7 text-xs justify-start px-2 ${
+                      dateFilter.preset === p ? 'bg-primary/10 text-primary border-primary/40' : 'text-muted-foreground'
+                    }`}
+                    onClick={() => applyDatePreset(p)}
+                  >
+                    {t(`presets.${p}`)}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Custom Date Range */}
+              <div className="space-y-2 pt-2 border-t border-border">
+                <span className="text-xs font-medium text-muted-foreground">
+                  {t('presets.custom')}
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">
+                      {t('dateFrom')}
+                    </label>
+                    <Input
+                      type="date"
+                      value={tempDateFrom}
+                      onChange={(e) => setTempDateFrom(e.target.value)}
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">
+                      {t('dateTo')}
+                    </label>
+                    <Input
+                      type="date"
+                      value={tempDateTo}
+                      onChange={(e) => setTempDateTo(e.target.value)}
+                      className="h-8 text-xs bg-background"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    size="sm"
+                    className="h-7 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                    disabled={!tempDateFrom && !tempDateTo}
+                    onClick={() => applyCustomDate(tempDateFrom, tempDateTo)}
+                  >
+                    {t('apply')}
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Custom field filter */}
+          <Popover
+            open={customFieldPopoverOpen}
+            onOpenChange={(open) => {
+              setCustomFieldPopoverOpen(open);
+              if (open) {
+                setTempFieldId(customFieldFilter.fieldId);
+                setTempOperator(customFieldFilter.operator);
+                setTempFieldValue(customFieldFilter.value);
+              }
+            }}
+          >
+            <PopoverTrigger
+              render={
+                <Button
+                  variant="outline"
+                  className={`border-border text-muted-foreground hover:bg-muted shrink-0 ${
+                    hasCustomFieldFilter ? 'border-primary/50 text-primary bg-primary/10' : ''
+                  }`}
+                />
+              }
+            >
+              <SlidersHorizontal className="size-4" />
+              {hasCustomFieldFilter
+                ? `${selectedCustomFieldName || t('filterByCustomField')}`
+                : t('filterByCustomField')}
+              {hasCustomFieldFilter && (
+                <span className="ml-1 inline-flex items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-semibold text-primary-foreground">
+                  1
+                </span>
+              )}
+            </PopoverTrigger>
+            <PopoverContent align="start" className="w-80 p-3">
+              <div className="flex items-center justify-between pb-2 mb-2 border-b border-border">
+                <span className="text-sm font-medium text-popover-foreground">
+                  {t('filterByCustomField')}
+                </span>
+                {hasCustomFieldFilter && (
+                  <button
+                    onClick={clearCustomFieldFilter}
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    {t('clear')}
+                  </button>
+                )}
+              </div>
+
+              {customFields.length === 0 ? (
+                <div className="py-3 text-center space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {t('noCustomFieldsYet')}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setCustomFieldPopoverOpen(false);
+                      setCustomFieldsOpen(true);
+                    }}
+                  >
+                    {t('manageFields')}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">
+                      {t('filterByCustomField')}
+                    </label>
+                    <select
+                      value={tempFieldId}
+                      onChange={(e) => setTempFieldId(e.target.value)}
+                      className="w-full h-8 px-2 text-xs rounded-md border border-input bg-background text-foreground"
+                    >
+                      <option value="">{t('selectField')}</option>
+                      {customFields.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">
+                      {t('operator')}
+                    </label>
+                    <select
+                      value={tempOperator}
+                      onChange={(e) => setTempOperator(e.target.value as CustomFieldOperator)}
+                      className="w-full h-8 px-2 text-xs rounded-md border border-input bg-background text-foreground"
+                    >
+                      <option value="contains">{t('operatorContains')}</option>
+                      <option value="is">{t('operatorIs')}</option>
+                      <option value="is_not">{t('operatorIsNot')}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] text-muted-foreground mb-1 block">
+                      Valor
+                    </label>
+                    <Input
+                      value={tempFieldValue}
+                      onChange={(e) => setTempFieldValue(e.target.value)}
+                      placeholder={t('fieldValuePlaceholder')}
+                      className="h-8 text-xs bg-background"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && tempFieldId && tempFieldValue.trim()) {
+                          applyCustomFieldFilter(tempFieldId, tempOperator, tempFieldValue.trim());
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1 border-t border-border">
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                      disabled={!tempFieldId || !tempFieldValue.trim()}
+                      onClick={() => applyCustomFieldFilter(tempFieldId, tempOperator, tempFieldValue.trim())}
+                    >
+                      {t('apply')}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
           {totalCount > 0 && !selectAllMatching && (
             <Button
               variant="outline"
@@ -816,9 +1287,14 @@ function ContactsPageInner() {
           )}
         </div>
 
-        {/* Active tag-filter chips */}
-        {selectedTagIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
+        {/* Active filter chips */}
+        {(selectedTagIds.length > 0 || selectedBaseId || hasDateFilter || hasCustomFieldFilter) && (
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-xs text-muted-foreground mr-1">
+              {t('activeFilters')}
+            </span>
+
+            {/* Tags */}
             {selectedTagIds.map((id) => {
               const tag = tagsMap[id];
               if (!tag) return null;
@@ -842,11 +1318,58 @@ function ContactsPageInner() {
                 </span>
               );
             })}
+
+            {/* Base */}
+            {selectedBaseId && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-foreground">
+                <Layers className="size-3 text-muted-foreground" />
+                {selectedBaseId === '__none__'
+                  ? t('filterByBaseNone')
+                  : (leadBaseNameById[selectedBaseId] ?? t('filterByBase'))}
+                <button
+                  onClick={() => selectBaseFilter('')}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Date */}
+            {hasDateFilter && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs text-primary">
+                <Calendar className="size-3" />
+                {dateFilter.preset && dateFilter.preset !== 'custom'
+                  ? t(`presets.${dateFilter.preset}`)
+                  : `${dateFilter.from || '…'} ~ ${dateFilter.to || '…'}`}
+                <button
+                  onClick={clearDateFilter}
+                  className="text-primary hover:text-primary/70"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            )}
+
+            {/* Custom Field */}
+            {hasCustomFieldFilter && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs text-primary">
+                <SlidersHorizontal className="size-3" />
+                {selectedCustomFieldName}: {t(`operator${customFieldFilter.operator === 'contains' ? 'Contains' : customFieldFilter.operator === 'is' ? 'Is' : 'IsNot'}`)} &quot;{customFieldFilter.value}&quot;
+                <button
+                  onClick={clearCustomFieldFilter}
+                  className="text-primary hover:text-primary/70"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            )}
+
             <button
-              onClick={clearTagFilters}
-              className="text-xs text-muted-foreground hover:text-foreground px-1"
+              onClick={clearAllActiveFilters}
+              className="text-xs text-muted-foreground hover:text-foreground underline ml-2"
             >
-              {t('clearAll')}
+              {t('clearAllFilters')}
             </button>
           </div>
         )}
