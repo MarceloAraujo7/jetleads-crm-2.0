@@ -169,7 +169,8 @@ export default function BroadcastDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [retrying, setRetrying] = useState(false);
-  const { retryFailedRecipients } = useBroadcastSending();
+  const [resuming, setResuming] = useState(false);
+  const { retryFailedRecipients, resumePendingRecipients } = useBroadcastSending();
 
   const fetchData = useCallback(async () => {
     try {
@@ -221,6 +222,30 @@ export default function BroadcastDetailPage() {
       setRetrying(false);
     }
   }
+
+  async function handleResumePending() {
+    setResuming(true);
+    try {
+      const { sent, stillPending } = await resumePendingRecipients(broadcastId);
+      if (sent === 0 && stillPending === 0) {
+        toast.info(t('toastNoPendingRecipients'));
+      } else if (stillPending === 0) {
+        toast.success(t('toastResumeSuccess', { count: sent }));
+      } else {
+        toast.warning(t('toastResumePartial', { sent, stillPending }));
+      }
+      await fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('toastResumeFailed'));
+    } finally {
+      setResuming(false);
+    }
+  }
+
+  const pendingCount = useMemo(
+    () => recipients.filter((r) => r.status === 'pending').length,
+    [recipients],
+  );
 
   const filteredRecipients = useMemo(
     () =>
@@ -438,6 +463,27 @@ export default function BroadcastDetailPage() {
           onClick={() => setStatusFilter('failed')}
         />
       </div>
+
+      {pendingCount > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <p className="text-sm text-amber-300">
+            {t('resumePendingHint', { count: pendingCount })}
+          </p>
+          <Button
+            size="sm"
+            onClick={handleResumePending}
+            disabled={resuming}
+            className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            {resuming ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {resuming ? t('resuming') : t('resumePending')}
+          </Button>
+        </div>
+      )}
 
       {broadcast.failed_count > 0 && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3">

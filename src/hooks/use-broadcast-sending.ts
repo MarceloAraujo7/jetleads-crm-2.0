@@ -66,6 +66,13 @@ interface UseBroadcastSendingReturn {
    *  existing broadcast, reusing its stored template/variables/channel.
    *  Returns how many of those retried recipients ended up sent. */
   retryFailedRecipients: (broadcastId: string) => Promise<{ retried: number; stillFailed: number }>;
+  /** Picks up recipients still `pending` on a broadcast that never
+   *  finished — the send loop runs in the browser tab that started
+   *  it, so closing that tab, a lost connection, or the laptop
+   *  sleeping mid-send leaves the rest of the audience never
+   *  attempted (not failed — nothing ran for them at all). Reuses the
+   *  broadcast's stored template/variables/channel, same as retry. */
+  resumePendingRecipients: (broadcastId: string) => Promise<{ sent: number; stillPending: number }>;
   isProcessing: boolean;
   progress: number;
 }
@@ -662,6 +669,75 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
   }
 
+  async function resumePendingRecipients(
+    broadcastId: string,
+  ): Promise<{ sent: number; stillPending: number }> {
+    setIsProcessing(true);
+    setProgress(0);
+    const supabase = createClient();
+
+    try {
+      const { data: broadcast, error: bErr } = await supabase
+        .from('broadcasts')
+        .select('*')
+        .eq('id', broadcastId)
+        .single();
+      if (bErr || !broadcast) throw new Error('Broadcast not found.');
+
+      const { data: templateRow, error: tErr } = await supabase
+        .from('message_templates')
+        .select('*')
+        .eq('account_id', broadcast.account_id)
+        .eq('name', broadcast.template_name)
+        .eq('language', broadcast.template_language)
+        .maybeSingle();
+      if (tErr || !templateRow) {
+        throw new Error('Template not found — it may have been deleted or renamed since this broadcast was sent.');
+      }
+
+      setProgress(10);
+      const { data: pendingRows, error: rErr } = await supabase
+        .from('broadcast_recipients')
+        .select('id, contact:contacts(*)')
+        .eq('broadcast_id', broadcastId)
+        .eq('status', 'pending');
+      if (rErr) throw new Error('Failed to load pending recipients.');
+
+      const recipients = (pendingRows ?? []) as unknown as SendableRecipient[];
+      if (recipients.length === 0) {
+        return { sent: 0, stillPending: 0 };
+      }
+
+      const { failedCount } = await sendRecipientBatches(
+        supabase,
+        recipients,
+        templateRow as unknown as MessageTemplate,
+        (broadcast.template_variables ?? {}) as Record<string, VariableMapping>,
+        broadcast.channel_id,
+        (broadcast.header_media_url as string | null | undefined) ?? undefined,
+        (fraction) => setProgress(10 + Math.round(fraction * 85)),
+      );
+
+      // Re-check for any recipients still pending (e.g. this resume
+      // attempt itself got interrupted) before deciding the broadcast
+      // is actually done — only then does 'sending' stop being accurate.
+      const { count: stillPendingCount } = await supabase
+        .from('broadcast_recipients')
+        .select('id', { count: 'exact', head: true })
+        .eq('broadcast_id', broadcastId)
+        .eq('status', 'pending');
+
+      if (!stillPendingCount) {
+        await supabase.from('broadcasts').update({ status: 'sent' }).eq('id', broadcastId);
+      }
+
+      setProgress(100);
+      return { sent: recipients.length - failedCount, stillPending: stillPendingCount ?? 0 };
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   async function createAndSendBroadcast(payload: BroadcastPayload): Promise<string> {
     setIsProcessing(true);
     setProgress(0);
@@ -802,5 +878,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
   }
 
-  return { createAndSendBroadcast, retryFailedRecipients, isProcessing, progress };
+  return {
+    createAndSendBroadcast,
+    retryFailedRecipients,
+    resumePendingRecipients,
+    isProcessing,
+    progress,
+  };
 }

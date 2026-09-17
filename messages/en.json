@@ -944,7 +944,14 @@
       "toastNoFailedRecipients": "No failed recipients to retry.",
       "toastRetrySuccess": "{count} {count, plural, =1 {message} other {messages}} resent successfully.",
       "toastRetryPartial": "{retried} resent successfully, {stillFailed} still failed.",
-      "toastRetryFailed": "Failed to retry the messages."
+      "toastRetryFailed": "Failed to retry the messages.",
+      "resumePendingHint": "{count} {count, plural, =1 {recipient hasn't} other {recipients haven't}} received this broadcast yet — sending looks like it got interrupted (tab closed, connection lost).",
+      "resumePending": "Continue sending",
+      "resuming": "Continuing…",
+      "toastNoPendingRecipients": "No pending recipients.",
+      "toastResumeSuccess": "{count} {count, plural, =1 {message} other {messages}} sent successfully.",
+      "toastResumePartial": "{sent} sent, {stillPending} still pending — try continuing again.",
+      "toastResumeFailed": "Failed to continue sending."
     },
     "new": {
       "title": "New Broadcast",
