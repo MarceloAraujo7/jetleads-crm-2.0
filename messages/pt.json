@@ -988,6 +988,7 @@
       "toastRetrySuccess": "{count} {count, plural, =1 {mensagem reenviada} other {mensagens reenviadas}} com sucesso.",
       "toastRetryPartial": "{retried} reenviada(s) com sucesso, {stillFailed} ainda falharam.",
       "toastRetryFailed": "Falha ao reenviar as mensagens.",
+      "sendingHint": "Disparo em andamento — {count} {count, plural, =1 {destinatário restante} other {destinatários restantes}}.",
       "resumePendingHint": "{count} {count, plural, =1 {destinatário ainda não recebeu} other {destinatários ainda não receberam}} este disparo — o envio parece ter sido interrompido (aba fechada, conexão perdida).",
       "resumePending": "Continuar envio",
       "resuming": "Continuando…",

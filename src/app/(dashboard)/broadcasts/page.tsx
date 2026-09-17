@@ -411,17 +411,17 @@ export default function BroadcastsPage() {
                       className="mt-3 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/50 pt-2.5"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {pendingCount > 0 && (
+                      {pendingCount > 0 && broadcast.status !== 'sending' && (
                         <Button
                           size="sm"
                           disabled={isCardBusy}
                           onClick={() => handleResume(broadcast.id)}
-                          className="h-7 px-2.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                          className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium border-0 shadow-sm"
                         >
                           {isCardBusy && activeAction?.type === 'resuming' ? (
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                           ) : (
-                            <Play className="mr-1 h-3 w-3" />
+                            <Play className="mr-1 h-3 w-3 fill-current" />
                           )}
                           {isCardBusy && activeAction?.type === 'resuming'
                             ? t('resuming')
@@ -431,16 +431,15 @@ export default function BroadcastsPage() {
 
                       {broadcast.status === 'sending' && (
                         <Button
-                          variant="outline"
                           size="sm"
                           disabled={isCardBusy}
                           onClick={() => handlePause(broadcast.id)}
-                          className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 h-7 px-2.5 text-xs"
+                          className="h-7 px-2.5 text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium border-0 shadow-sm"
                         >
                           {isCardBusy && activeAction?.type === 'pausing' ? (
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                           ) : (
-                            <Pause className="mr-1 h-3 w-3" />
+                            <Pause className="mr-1 h-3 w-3 fill-current" />
                           )}
                           {isCardBusy && activeAction?.type === 'pausing'
                             ? t('pausing')
@@ -451,16 +450,15 @@ export default function BroadcastsPage() {
                       {(broadcast.status === 'sending' ||
                         (pendingCount > 0 && broadcast.status !== 'failed')) && (
                         <Button
-                          variant="outline"
                           size="sm"
                           disabled={isCardBusy}
                           onClick={() => handleStop(broadcast.id)}
-                          className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-7 px-2.5 text-xs"
+                          className="h-7 px-2.5 text-xs bg-red-600 hover:bg-red-700 text-white font-medium border-0 shadow-sm"
                         >
                           {isCardBusy && activeAction?.type === 'stopping' ? (
                             <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                           ) : (
-                            <Square className="mr-1 h-3 w-3" />
+                            <Square className="mr-1 h-3 w-3 fill-current" />
                           )}
                           {isCardBusy && activeAction?.type === 'stopping'
                             ? t('stopping')

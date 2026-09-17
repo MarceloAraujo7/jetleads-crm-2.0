@@ -400,40 +400,38 @@ export default function BroadcastDetailPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {pendingCount > 0 && (
+          {pendingCount > 0 && broadcast.status !== 'sending' && (
             <Button
               size="sm"
               onClick={handleResumePending}
               disabled={resuming}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium border-0 shadow-sm"
             >
-              {resuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {resuming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
               {resuming ? t('resuming') : t('resumePending')}
             </Button>
           )}
 
           {broadcast.status === 'sending' && (
             <Button
-              variant="outline"
               size="sm"
               onClick={handlePause}
               disabled={pausing}
-              className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+              className="bg-amber-500 hover:bg-amber-600 text-white font-medium border-0 shadow-sm"
             >
-              {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+              {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
               {pausing ? t('pausing') : t('pause')}
             </Button>
           )}
 
           {(broadcast.status === 'sending' || (pendingCount > 0 && broadcast.status !== 'failed')) && (
             <Button
-              variant="outline"
               size="sm"
               onClick={handleStop}
               disabled={stopping}
-              className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+              className="bg-red-600 hover:bg-red-700 text-white font-medium border-0 shadow-sm"
             >
-              {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+              {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5 fill-current" />}
               {stopping ? t('stopping') : t('stop')}
             </Button>
           )}
@@ -546,43 +544,45 @@ export default function BroadcastDetailPage() {
       {pendingCount > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
           <p className="text-sm text-amber-300">
-            {t('resumePendingHint', { count: pendingCount })}
+            {broadcast.status === 'sending'
+              ? t('sendingHint', { count: pendingCount })
+              : t('resumePendingHint', { count: pendingCount })}
           </p>
           <div className="flex items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              onClick={handleResumePending}
-              disabled={resuming}
-              className="shrink-0 bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
-            >
-              {resuming ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Play className="h-3.5 w-3.5" />
-              )}
-              {resuming ? t('resuming') : t('resumePending')}
-            </Button>
+            {broadcast.status !== 'sending' && (
+              <Button
+                size="sm"
+                onClick={handleResumePending}
+                disabled={resuming}
+                className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-medium border-0 shadow-sm disabled:opacity-50"
+              >
+                {resuming ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Play className="h-3.5 w-3.5 fill-current" />
+                )}
+                {resuming ? t('resuming') : t('resumePending')}
+              </Button>
+            )}
             {broadcast.status === 'sending' && (
               <Button
-                variant="outline"
                 size="sm"
                 onClick={handlePause}
                 disabled={pausing}
-                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white font-medium border-0 shadow-sm disabled:opacity-50"
               >
-                {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}
+                {pausing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5 fill-current" />}
                 {pausing ? t('pausing') : t('pause')}
               </Button>
             )}
-            {broadcast.status !== 'failed' && (
+            {(broadcast.status === 'sending' || (pendingCount > 0 && broadcast.status !== 'failed')) && (
               <Button
-                variant="outline"
                 size="sm"
                 onClick={handleStop}
                 disabled={stopping}
-                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                className="shrink-0 bg-red-600 hover:bg-red-700 text-white font-medium border-0 shadow-sm disabled:opacity-50"
               >
-                {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5" />}
+                {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3.5 w-3.5 fill-current" />}
                 {stopping ? t('stopping') : t('stop')}
               </Button>
             )}

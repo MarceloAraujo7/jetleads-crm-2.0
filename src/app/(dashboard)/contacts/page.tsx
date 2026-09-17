@@ -1052,7 +1052,7 @@ function ContactsPageInner() {
                 />
               }
             >
-              <Calendar className="size-4" />
+              <Calendar className="size-4 text-black dark:text-white shrink-0" />
               {dateFilter.preset && dateFilter.preset !== 'custom'
                 ? t(`presets.${dateFilter.preset}`)
                 : hasDateFilter
