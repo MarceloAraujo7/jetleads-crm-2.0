@@ -30,10 +30,10 @@ import { toast } from "sonner";
 import { useTranslations, useLocale } from "next-intl";
 import Link from "next/link";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const TYPE_ICON: Record<Notification["type"], typeof Bell> = {
   conversation_assigned: UserPlus,
@@ -48,7 +48,7 @@ export function NotificationsPopover() {
   const { accountId } = useAuth();
   const unreadNotificationsCount = useUnreadNotifications();
   const unreadMessagesCount = useTotalUnread();
-  const totalUnread = unreadMessagesCount + unreadNotificationsCount;
+  const totalUnread = (unreadMessagesCount ?? 0) + (unreadNotificationsCount ?? 0);
 
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"messages" | "notifications">("messages");
@@ -62,27 +62,39 @@ export function NotificationsPopover() {
 
   // Sync sound status
   useEffect(() => {
-    setSoundEnabled(soundEffects.isEnabled());
+    try {
+      setSoundEnabled(soundEffects.isEnabled());
+    } catch {
+      // Ignore
+    }
   }, []);
 
   const handleToggleSound = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    const next = soundEffects.toggle();
-    setSoundEnabled(next);
-    toast.info(next ? t("soundEnabled") : t("soundDisabled"));
+    try {
+      const next = soundEffects.toggle();
+      setSoundEnabled(next);
+      toast.info(next ? t("soundEnabled") : t("soundDisabled"));
+    } catch {
+      // Ignore
+    }
   }, [t]);
 
   // Load system notifications
   const loadNotifications = useCallback(async () => {
     if (!accountId) return;
-    const supabase = createClient();
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("account_id", accountId)
-      .order("created_at", { ascending: false })
-      .limit(LIST_LIMIT);
-    setNotifications((data ?? []) as Notification[]);
+    try {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false })
+        .limit(LIST_LIMIT);
+      setNotifications((data ?? []) as Notification[]);
+    } catch (err) {
+      console.warn("[NotificationsPopover] Failed to load notifications:", err);
+    }
   }, [accountId]);
 
   // Load recent conversations with unread / new messages
@@ -100,6 +112,8 @@ export function NotificationsPopover() {
       if (!error && data) {
         setConversations(normalizeConversations(data as unknown as Parameters<typeof normalizeConversations>[0]));
       }
+    } catch (err) {
+      console.warn("[NotificationsPopover] Failed to load conversations:", err);
     } finally {
       setLoadingMessages(false);
     }
@@ -169,12 +183,16 @@ export function NotificationsPopover() {
         prev?.map((n) => (n.id === id && !n.read_at ? { ...n, read_at: new Date().toISOString() } : n)) ??
         prev,
     );
-    const supabase = createClient();
-    await supabase
-      .from("notifications")
-      .update({ read_at: new Date().toISOString() })
-      .eq("id", id)
-      .is("read_at", null);
+    try {
+      const supabase = createClient();
+      await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .eq("id", id)
+        .is("read_at", null);
+    } catch {
+      // Ignore
+    }
   }, []);
 
   const handleNotificationClick = useCallback(
@@ -203,40 +221,48 @@ export function NotificationsPopover() {
     setMarkingAll(true);
     const now = new Date().toISOString();
     setNotifications((prev) => prev?.map((n) => (n.read_at ? n : { ...n, read_at: now })) ?? prev);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: now })
-      .is("read_at", null);
-    setMarkingAll(false);
-    if (error) {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("notifications")
+        .update({ read_at: now })
+        .is("read_at", null);
+      if (error) {
+        toast.error(t("notificationsMarkAllFailed"));
+        loadNotifications();
+      }
+    } catch {
       toast.error(t("notificationsMarkAllFailed"));
-      loadNotifications();
+    } finally {
+      setMarkingAll(false);
     }
   }, [unreadIds.length, loadNotifications, t]);
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger
-        aria-label={
-          totalUnread > 0 ? t("totalUnread", { count: totalUnread }) : t("notifications")
-        }
-        className="relative flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-popup-open:bg-muted data-popup-open:text-foreground"
-      >
-        <Bell className="h-[18px] w-[18px]" />
-        {totalUnread > 0 && (
-          <span
-            aria-hidden
-            className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground animate-pulse"
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            aria-label={t("notifications")}
+            className="relative flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer focus-visible:outline-none"
           >
-            {totalUnread > 99 ? "99+" : totalUnread}
-          </span>
-        )}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
+            <Bell className="h-[18px] w-[18px]" />
+            {totalUnread > 0 && (
+              <span
+                aria-hidden
+                className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold text-primary-foreground animate-pulse"
+              >
+                {totalUnread > 99 ? "99+" : totalUnread}
+              </span>
+            )}
+          </button>
+        }
+      />
+      <PopoverContent
         align="end"
         sideOffset={6}
-        className="w-80 sm:w-[400px] bg-popover p-0 text-popover-foreground ring-border shadow-xl rounded-xl"
+        className="w-80 sm:w-[400px] p-0 text-popover-foreground shadow-2xl rounded-xl border border-border bg-popover overflow-hidden"
       >
         {/* Header with Title & Action Icons */}
         <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3.5 py-2.5">
@@ -255,7 +281,7 @@ export function NotificationsPopover() {
               type="button"
               onClick={handleToggleSound}
               title={soundEnabled ? t("soundEnabled") : t("soundDisabled")}
-              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer"
             >
               {soundEnabled ? (
                 <Volume2 className="h-4 w-4 text-emerald-500" />
@@ -271,7 +297,7 @@ export function NotificationsPopover() {
                 disabled={markingAll}
                 onClick={markAllRead}
                 title={t("notificationsMarkAllRead")}
-                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10"
+                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/10 cursor-pointer"
               >
                 {markingAll ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -290,7 +316,7 @@ export function NotificationsPopover() {
             type="button"
             onClick={() => setActiveTab("messages")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 transition-colors",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 transition-colors cursor-pointer",
               activeTab === "messages"
                 ? "bg-background text-foreground shadow-xs font-semibold"
                 : "text-muted-foreground hover:text-foreground",
@@ -309,7 +335,7 @@ export function NotificationsPopover() {
             type="button"
             onClick={() => setActiveTab("notifications")}
             className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 transition-colors",
+              "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 transition-colors cursor-pointer",
               activeTab === "notifications"
                 ? "bg-background text-foreground shadow-xs font-semibold"
                 : "text-muted-foreground hover:text-foreground",
@@ -351,7 +377,7 @@ export function NotificationsPopover() {
                         type="button"
                         onClick={() => handleConversationClick(c.id)}
                         className={cn(
-                          "flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors",
+                          "flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors cursor-pointer",
                           hasUnread
                             ? "bg-emerald-500/10 hover:bg-emerald-500/15"
                             : "hover:bg-muted/60",
@@ -434,7 +460,7 @@ export function NotificationsPopover() {
                         type="button"
                         onClick={() => handleNotificationClick(n)}
                         className={cn(
-                          "flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors",
+                          "flex w-full items-start gap-2.5 rounded-xl p-2.5 text-left transition-colors cursor-pointer",
                           isUnread ? "bg-primary-soft hover:bg-primary-soft-2" : "hover:bg-muted/60",
                         )}
                       >
@@ -488,7 +514,7 @@ export function NotificationsPopover() {
             <Link
               href="/inbox"
               onClick={() => setOpen(false)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-center text-xs font-medium text-primary hover:bg-muted/60 transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-center text-xs font-medium text-primary hover:bg-muted/60 transition-colors cursor-pointer"
             >
               <span>{t("viewAllInbox")}</span>
               <ExternalLink className="h-3 w-3" />
@@ -497,14 +523,14 @@ export function NotificationsPopover() {
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-center text-xs font-medium text-primary hover:bg-muted/60 transition-colors"
+              className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-center text-xs font-medium text-primary hover:bg-muted/60 transition-colors cursor-pointer"
             >
               <span>{t("notificationsViewAll")}</span>
               <ExternalLink className="h-3 w-3" />
             </Link>
           )}
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { soundEffects } from "@/lib/sound-effects";
@@ -13,44 +13,55 @@ import type { Message, Notification } from "@/types";
  */
 export function SoundNotificationListener() {
   const { accountId } = useAuth();
-  const mountedRef = useRef(false);
 
   useEffect(() => {
-    // Avoid double mounting effects in React StrictMode
-    if (mountedRef.current) return;
-    mountedRef.current = true;
+    if (!accountId) return;
 
-    const supabase = createClient();
+    try {
+      const supabase = createClient();
 
-    const channel = supabase
-      .channel("global-sound-notification-listener")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
-        (payload) => {
-          const msg = payload.new as Message;
-          // Inbound message from a customer
-          if (msg.sender_type === "customer") {
-            soundEffects.playMessageSound();
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications" },
-        (payload) => {
-          const n = payload.new as Notification;
-          if (!n.read_at) {
-            soundEffects.playNotificationSound();
-          }
-        },
-      )
-      .subscribe();
+      const channel = supabase
+        .channel("global-sound-notification-listener")
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "messages" },
+          (payload) => {
+            try {
+              const msg = payload.new as Message;
+              if (msg && msg.sender_type === "customer") {
+                soundEffects.playMessageSound();
+              }
+            } catch (err) {
+              console.warn("[SoundNotificationListener] Error handling message sound:", err);
+            }
+          },
+        )
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "notifications" },
+          (payload) => {
+            try {
+              const n = payload.new as Notification;
+              if (n && !n.read_at) {
+                soundEffects.playNotificationSound();
+              }
+            } catch (err) {
+              console.warn("[SoundNotificationListener] Error handling notification sound:", err);
+            }
+          },
+        )
+        .subscribe();
 
-    return () => {
-      mountedRef.current = false;
-      supabase.removeChannel(channel);
-    };
+      return () => {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // Ignore removal errors
+        }
+      };
+    } catch (err) {
+      console.warn("[SoundNotificationListener] Error initializing listener:", err);
+    }
   }, [accountId]);
 
   return null;

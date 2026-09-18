@@ -22,11 +22,15 @@ class SoundEffects {
 
       // Unlock AudioContext on first user gesture per browser autoplay policies
       const unlock = () => {
-        this.initContext();
-        if (this.ctx && this.ctx.state === "suspended") {
-          this.ctx.resume().catch(() => {});
+        try {
+          this.initContext();
+          if (this.ctx && this.ctx.state === "suspended") {
+            this.ctx.resume().catch(() => {});
+          }
+          this.unlocked = true;
+        } catch {
+          // AudioContext not supported or restricted in environment
         }
-        this.unlocked = true;
         window.removeEventListener("pointerdown", unlock);
         window.removeEventListener("keydown", unlock);
       };
@@ -38,9 +42,15 @@ class SoundEffects {
 
   private initContext(): AudioContext | null {
     if (!this.ctx && typeof window !== "undefined") {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        this.ctx = new AudioCtx();
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          this.ctx = new AudioCtx();
+        }
+      } catch {
+        this.ctx = null;
       }
     }
     return this.ctx;
@@ -75,14 +85,14 @@ class SoundEffects {
    */
   public playMessageSound(): void {
     if (!this.soundEnabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
     try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+
       const now = ctx.currentTime;
 
       // Note 1: 784Hz (G5)
@@ -120,14 +130,14 @@ class SoundEffects {
    */
   public playNotificationSound(): void {
     if (!this.soundEnabled) return;
-    const ctx = this.initContext();
-    if (!ctx) return;
-
-    if (ctx.state === "suspended") {
-      ctx.resume().catch(() => {});
-    }
-
     try {
+      const ctx = this.initContext();
+      if (!ctx) return;
+
+      if (ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+
       const now = ctx.currentTime;
       const frequencies = [523.25, 659.25, 783.99, 1046.5];
 
@@ -136,7 +146,7 @@ class SoundEffects {
         const gain = ctx.createGain();
         osc.type = "triangle";
         osc.frequency.setValueAtTime(freq, now + idx * 0.04);
-        
+
         const startTime = now + idx * 0.04;
         gain.gain.setValueAtTime(0, now);
         gain.gain.setValueAtTime(0.18, startTime);
