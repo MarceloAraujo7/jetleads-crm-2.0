@@ -20,8 +20,9 @@ export function SoundNotificationListener() {
     try {
       const supabase = createClient();
 
+      const channelId = `sound-listener-${Math.random().toString(36).slice(2, 9)}`;
       const channel = supabase
-        .channel("global-sound-notification-listener")
+        .channel(channelId)
         .on(
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "messages" },

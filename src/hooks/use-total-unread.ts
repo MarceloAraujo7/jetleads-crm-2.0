@@ -42,31 +42,43 @@ export function useTotalUnread(): number {
       setTotal(sum);
     })();
 
-    const channel = supabase
-      .channel("total-unread-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "conversations" },
-        (payload) => {
-          const map = countsRef.current;
-          if (payload.eventType === "DELETE") {
-            const oldRow = payload.old as Partial<Conversation>;
-            if (oldRow.id) map.delete(oldRow.id);
-          } else {
-            const row = payload.new as Conversation;
-            map.set(row.id, row.unread_count ?? 0);
-          }
-          // Recompute — cheap, conversations per user stay small.
-          let sum = 0;
-          for (const n of map.values()) if (n > 0) sum += 1;
-          setTotal(sum);
-        },
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelId = `total-unread-${Math.random().toString(36).slice(2, 9)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "conversations" },
+          (payload) => {
+            const map = countsRef.current;
+            if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<Conversation>;
+              if (oldRow.id) map.delete(oldRow.id);
+            } else {
+              const row = payload.new as Conversation;
+              map.set(row.id, row.unread_count ?? 0);
+            }
+            // Recompute — cheap, conversations per user stay small.
+            let sum = 0;
+            for (const n of map.values()) if (n > 0) sum += 1;
+            setTotal(sum);
+          },
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[useTotalUnread] Failed to subscribe to realtime channel:", err);
+    }
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
     };
   }, []);
 

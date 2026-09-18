@@ -133,47 +133,68 @@ export function NotificationsPopover() {
   // Realtime updates for notifications
   useEffect(() => {
     const supabase = createClient();
-    const notifChannel = supabase
-      .channel("notifications-popover-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const row = payload.new as Notification;
-            setNotifications((prev) => {
-              if (!prev) return [row];
-              if (prev.some((n) => n.id === row.id)) return prev;
-              return [row, ...prev].slice(0, LIST_LIMIT);
-            });
-          } else if (payload.eventType === "UPDATE") {
-            const row = payload.new as Notification;
-            setNotifications(
-              (prev) => prev?.map((n) => (n.id === row.id ? { ...n, ...row } : n)) ?? prev,
-            );
-          } else if (payload.eventType === "DELETE") {
-            const oldRow = payload.old as Partial<Notification>;
-            setNotifications((prev) => prev?.filter((n) => n.id !== oldRow.id) ?? prev);
-          }
-        },
-      )
-      .subscribe();
+    let notifChannel: ReturnType<typeof supabase.channel> | null = null;
+    let convChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    const convChannel = supabase
-      .channel("conversations-popover-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "conversations" },
-        () => {
-          // Re-fetch conversations if popover is open
-          loadConversations();
-        },
-      )
-      .subscribe();
+    try {
+      const notifId = `notifications-popover-live-${Math.random().toString(36).slice(2, 9)}`;
+      notifChannel = supabase
+        .channel(notifId)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications" },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Notification;
+              setNotifications((prev) => {
+                if (!prev) return [row];
+                if (prev.some((n) => n.id === row.id)) return prev;
+                return [row, ...prev].slice(0, LIST_LIMIT);
+              });
+            } else if (payload.eventType === "UPDATE") {
+              const row = payload.new as Notification;
+              setNotifications(
+                (prev) => prev?.map((n) => (n.id === row.id ? { ...n, ...row } : n)) ?? prev,
+              );
+            } else if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<Notification>;
+              setNotifications((prev) => prev?.filter((n) => n.id !== oldRow.id) ?? prev);
+            }
+          },
+        )
+        .subscribe();
+
+      const convId = `conversations-popover-live-${Math.random().toString(36).slice(2, 9)}`;
+      convChannel = supabase
+        .channel(convId)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "conversations" },
+          () => {
+            // Re-fetch conversations if popover is open
+            loadConversations();
+          },
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[NotificationsPopover] Failed to subscribe to realtime channels:", err);
+    }
 
     return () => {
-      supabase.removeChannel(notifChannel);
-      supabase.removeChannel(convChannel);
+      if (notifChannel) {
+        try {
+          supabase.removeChannel(notifChannel);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+      if (convChannel) {
+        try {
+          supabase.removeChannel(convChannel);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
     };
   }, [loadConversations]);
 

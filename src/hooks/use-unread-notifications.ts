@@ -30,32 +30,44 @@ export function useUnreadNotifications(): number {
       setCount(unreadCount ?? 0);
     })();
 
-    const channel = supabase
-      .channel("notifications-unread-count")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "notifications" },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            const row = payload.new as Notification;
-            if (!row.read_at) setCount((n) => n + 1);
-          } else if (payload.eventType === "UPDATE") {
-            // Updates here only ever set read_at (marking a notification
-            // read). Derive purely from the new row so we don't rely on
-            // payload.old columns, which require REPLICA IDENTITY FULL.
-            const newRow = payload.new as Notification;
-            if (newRow.read_at) setCount((n) => Math.max(0, n - 1));
-          } else if (payload.eventType === "DELETE") {
-            const oldRow = payload.old as Partial<Notification>;
-            if (!oldRow.read_at) setCount((n) => Math.max(0, n - 1));
-          }
-        },
-      )
-      .subscribe();
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      const channelId = `notifications-unread-${Math.random().toString(36).slice(2, 9)}`;
+      channel = supabase
+        .channel(channelId)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "notifications" },
+          (payload) => {
+            if (payload.eventType === "INSERT") {
+              const row = payload.new as Notification;
+              if (!row.read_at) setCount((n) => n + 1);
+            } else if (payload.eventType === "UPDATE") {
+              // Updates here only ever set read_at (marking a notification
+              // read). Derive purely from the new row so we don't rely on
+              // payload.old columns, which require REPLICA IDENTITY FULL.
+              const newRow = payload.new as Notification;
+              if (newRow.read_at) setCount((n) => Math.max(0, n - 1));
+            } else if (payload.eventType === "DELETE") {
+              const oldRow = payload.old as Partial<Notification>;
+              if (!oldRow.read_at) setCount((n) => Math.max(0, n - 1));
+            }
+          },
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn("[useUnreadNotifications] Failed to subscribe to realtime channel:", err);
+    }
 
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // ignore cleanup errors
+        }
+      }
     };
   }, []);
 
